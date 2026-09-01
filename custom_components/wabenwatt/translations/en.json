@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "What do you want to connect?",
+        "menu_options": {
+          "pv": "PV plant"
+        }
+      },
+      "pv": {
+        "title": "Connect a PV plant",
+        "description": "Add the integration once per plant. The plant token is under “Show token” in the plant's Integrations tab on wabenwatt.de. A first report is sent right away, so the plant shows up as active within two minutes.",
+        "data": {
+          "name": "Name",
+          "api_token": "Plant token",
+          "pv_sensors": "Solar power sensor(s)",
+          "battery_sensor": "Battery power sensor (optional)",
+          "battery_invert": "Invert battery sign"
+        },
+        "data_description": {
+          "name": "Shown in Home Assistant, e.g. the plant's name on wabenwatt.",
+          "api_token": "Identifies the plant; every token belongs to exactly one plant.",
+          "pv_sensors": "The plant's total solar power. Plug-in solar (micro inverter): the AC value. String or hybrid inverters: the DC power of the strings — not the AC value, which for hybrid systems also contains the battery output. No total entity? Select one entity per string; the values are added up.",
+          "battery_sensor": "Only for plants with separate battery metering (hybrid inverter): the battery's power, which is not part of the DC value above. Otherwise leave empty — then only the solar power is reported.",
+          "battery_invert": "Wabenwatt expects positive = discharging. Enable this if your sensor is positive while charging."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Renew plant token",
+        "description": "The token of “{name}” was rejected (unknown or revoked). Enter the plant's current token from wabenwatt.de.",
+        "data": {
+          "api_token": "Plant token"
+        }
+      }
+    },
+    "error": {
+      "invalid_token": "The plant token was rejected — copy it again from “Show token” on wabenwatt.de.",
+      "sensor_unavailable": "{entity_id} has no numeric value right now (unavailable/unknown). Choose a sensor that currently delivers a value.",
+      "sensor_not_power": "{entity_id} is not a power sensor (unit: {unit}). Choose a sensor in W or kW.",
+      "battery_not_supported": "This plant is not set up for separate battery metering on wabenwatt. Leave the battery sensor empty or change the plant's settings first.",
+      "report_rejected": "wabenwatt rejected the test report: {code} — {message}",
+      "rate_limited": "wabenwatt is rate limiting this plant. Wait a minute and try again.",
+      "cannot_connect": "Could not reach reports.wabenwatt.de. Check the internet connection and try again."
+    },
+    "abort": {
+      "already_configured": "A plant with this token is already set up.",
+      "reauth_successful": "Token renewed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sensors",
+        "description": "Changes are checked with a real report right away.",
+        "data": {
+          "pv_sensors": "Solar power sensor(s)",
+          "battery_sensor": "Battery power sensor (optional)",
+          "battery_invert": "Invert battery sign"
+        },
+        "data_description": {
+          "pv_sensors": "The plant's total solar power. Plug-in solar (micro inverter): the AC value. String or hybrid inverters: the DC power of the strings — not the AC value, which for hybrid systems also contains the battery output. No total entity? Select one entity per string; the values are added up.",
+          "battery_sensor": "Only for plants with separate battery metering (hybrid inverter): the battery's power, which is not part of the DC value above. Otherwise leave empty — then only the solar power is reported.",
+          "battery_invert": "Wabenwatt expects positive = discharging. Enable this if your sensor is positive while charging."
+        }
+      }
+    },
+    "error": {
+      "invalid_token": "The plant token was rejected — copy it again from “Show token” on wabenwatt.de.",
+      "sensor_unavailable": "{entity_id} has no numeric value right now (unavailable/unknown). Choose a sensor that currently delivers a value.",
+      "sensor_not_power": "{entity_id} is not a power sensor (unit: {unit}). Choose a sensor in W or kW.",
+      "battery_not_supported": "This plant is not set up for separate battery metering on wabenwatt. Leave the battery sensor empty or change the plant's settings first.",
+      "report_rejected": "wabenwatt rejected the test report: {code} — {message}",
+      "rate_limited": "wabenwatt is rate limiting this plant. Wait a minute and try again.",
+      "cannot_connect": "Could not reach reports.wabenwatt.de. Check the internet connection and try again."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "ok": "Reporting",
+          "sensor_unavailable": "Sensor unavailable",
+          "error": "Error"
+        }
+      },
+      "last_report": {
+        "name": "Last report"
+      },
+      "last_error": {
+        "name": "Last error"
+      },
+      "reported_power": {
+        "name": "Reported power"
+      },
+      "reported_battery_power": {
+        "name": "Reported battery power"
+      }
+    }
+  }
+}

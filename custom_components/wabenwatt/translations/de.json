@@ -1,0 +1,101 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Was möchtest du verbinden?",
+        "menu_options": {
+          "pv": "PV-Anlage"
+        }
+      },
+      "pv": {
+        "title": "PV-Anlage verbinden",
+        "description": "Die Integration wird je Anlage einmal hinzugefügt. Den Anlagen-Token findest du auf wabenwatt.de im Integrations-Tab der Anlage unter „Token anzeigen“. Beim Speichern wird sofort ein erster Report gesendet – die Anlage erscheint innerhalb von zwei Minuten als aktiv.",
+        "data": {
+          "name": "Name",
+          "api_token": "Anlagen-Token",
+          "pv_sensors": "Solarleistungs-Sensor(en)",
+          "battery_sensor": "Batterieleistungs-Sensor (optional)",
+          "battery_invert": "Vorzeichen der Batterie umkehren"
+        },
+        "data_description": {
+          "name": "Anzeige in Home Assistant, z. B. der Name der Anlage auf wabenwatt.",
+          "api_token": "Identifiziert die Anlage; jeder Token gehört zu genau einer Anlage.",
+          "pv_sensors": "Die gesamte Solarleistung der Anlage. Bei Steckersolar (Micro-Wechselrichter) ist das der AC-Wert. Bei String- oder Hybrid-Wechselrichtern die DC-Leistung der Strings – nicht der AC-Wert, in dem bei Hybridanlagen auch die Abgabe des Akkus steckt. Keine Gesamt-Entität? Wähle je String eine Entität; die Werte werden addiert.",
+          "battery_sensor": "Nur für Anlagen mit getrennter Batteriemessung (Hybrid-Wechselrichter): die Leistung des Akkus, die im DC-Wert oben nicht enthalten ist. Sonst leer lassen – dann wird nur die Solarleistung gemeldet.",
+          "battery_invert": "Wabenwatt erwartet positiv = Entladung. Einschalten, wenn dein Sensor beim Laden positiv ist."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Anlagen-Token erneuern",
+        "description": "Der Token von „{name}“ wurde abgelehnt (unbekannt oder widerrufen). Trage den aktuellen Anlagen-Token von wabenwatt.de ein.",
+        "data": {
+          "api_token": "Anlagen-Token"
+        }
+      }
+    },
+    "error": {
+      "invalid_token": "Der Anlagen-Token wurde abgelehnt – kopiere ihn erneut unter „Token anzeigen“ auf wabenwatt.de.",
+      "sensor_unavailable": "{entity_id} liefert gerade keinen Zahlenwert (unavailable/unknown). Wähle einen Sensor, der aktuell einen Wert liefert.",
+      "sensor_not_power": "{entity_id} ist kein Leistungssensor (Einheit: {unit}). Wähle einen Sensor in W oder kW.",
+      "battery_not_supported": "Diese Anlage ist auf wabenwatt nicht für getrennte Batteriemessung eingerichtet. Lass den Batterie-Sensor leer oder ändere zuerst die Anlagen-Einstellungen.",
+      "report_rejected": "wabenwatt hat den Test-Report abgelehnt: {code} – {message}",
+      "rate_limited": "wabenwatt bremst diese Anlage gerade (Rate Limit). Warte eine Minute und versuche es erneut.",
+      "cannot_connect": "reports.wabenwatt.de ist nicht erreichbar. Prüfe die Internetverbindung und versuche es erneut."
+    },
+    "abort": {
+      "already_configured": "Eine Anlage mit diesem Token ist bereits eingerichtet.",
+      "reauth_successful": "Token erneuert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sensoren",
+        "description": "Änderungen werden sofort mit einem echten Report geprüft.",
+        "data": {
+          "pv_sensors": "Solarleistungs-Sensor(en)",
+          "battery_sensor": "Batterieleistungs-Sensor (optional)",
+          "battery_invert": "Vorzeichen der Batterie umkehren"
+        },
+        "data_description": {
+          "pv_sensors": "Die gesamte Solarleistung der Anlage. Bei Steckersolar (Micro-Wechselrichter) ist das der AC-Wert. Bei String- oder Hybrid-Wechselrichtern die DC-Leistung der Strings – nicht der AC-Wert, in dem bei Hybridanlagen auch die Abgabe des Akkus steckt. Keine Gesamt-Entität? Wähle je String eine Entität; die Werte werden addiert.",
+          "battery_sensor": "Nur für Anlagen mit getrennter Batteriemessung (Hybrid-Wechselrichter): die Leistung des Akkus, die im DC-Wert oben nicht enthalten ist. Sonst leer lassen – dann wird nur die Solarleistung gemeldet.",
+          "battery_invert": "Wabenwatt erwartet positiv = Entladung. Einschalten, wenn dein Sensor beim Laden positiv ist."
+        }
+      }
+    },
+    "error": {
+      "invalid_token": "Der Anlagen-Token wurde abgelehnt – kopiere ihn erneut unter „Token anzeigen“ auf wabenwatt.de.",
+      "sensor_unavailable": "{entity_id} liefert gerade keinen Zahlenwert (unavailable/unknown). Wähle einen Sensor, der aktuell einen Wert liefert.",
+      "sensor_not_power": "{entity_id} ist kein Leistungssensor (Einheit: {unit}). Wähle einen Sensor in W oder kW.",
+      "battery_not_supported": "Diese Anlage ist auf wabenwatt nicht für getrennte Batteriemessung eingerichtet. Lass den Batterie-Sensor leer oder ändere zuerst die Anlagen-Einstellungen.",
+      "report_rejected": "wabenwatt hat den Test-Report abgelehnt: {code} – {message}",
+      "rate_limited": "wabenwatt bremst diese Anlage gerade (Rate Limit). Warte eine Minute und versuche es erneut.",
+      "cannot_connect": "reports.wabenwatt.de ist nicht erreichbar. Prüfe die Internetverbindung und versuche es erneut."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "ok": "Meldet",
+          "sensor_unavailable": "Sensor nicht verfügbar",
+          "error": "Fehler"
+        }
+      },
+      "last_report": {
+        "name": "Letzter Report"
+      },
+      "last_error": {
+        "name": "Letzter Fehler"
+      },
+      "reported_power": {
+        "name": "Gemeldete Leistung"
+      },
+      "reported_battery_power": {
+        "name": "Gemeldete Batterieleistung"
+      }
+    }
+  }
+}

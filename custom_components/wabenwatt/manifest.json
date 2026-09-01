@@ -1,0 +1,12 @@
+{
+  "domain": "wabenwatt",
+  "name": "Wabenwatt",
+  "codeowners": ["@nikdom"],
+  "config_flow": true,
+  "documentation": "https://github.com/nikdom/wabenwatt-hacs",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/nikdom/wabenwatt-hacs/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
