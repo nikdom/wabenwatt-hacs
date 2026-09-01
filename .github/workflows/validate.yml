@@ -20,6 +20,8 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # License check stays off until a license is chosen for the repo.
+          ignore: license
 
   tests:
     runs-on: ubuntu-latest
