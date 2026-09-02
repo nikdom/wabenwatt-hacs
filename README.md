@@ -2,7 +2,7 @@
 
 [![Validate](https://github.com/nikdom/wabenwatt-hacs/actions/workflows/validate.yml/badge.svg)](https://github.com/nikdom/wabenwatt-hacs/actions/workflows/validate.yml)
 
-Meldet die aktuelle Leistung deiner PV-Anlage jede Minute an [wabenwatt.de](https://wabenwatt.de) – ohne `configuration.yaml`, ohne Blueprint, ohne Neustart. *English below.*
+Meldet die aktuelle Leistung deiner PV-Anlage jede Minute an [wabenwatt.de](https://wabenwatt.de) – ohne `configuration.yaml`, ohne Blueprint. *English below.*
 
 ## Was die Integration tut
 
@@ -49,7 +49,7 @@ Ein `0`-Wert in der Nacht ist korrekt und wird gemeldet. Leicht negative Werte (
 
 # Wabenwatt for Home Assistant
 
-Reports your PV plant's current power to [wabenwatt.de](https://wabenwatt.de) every minute – no `configuration.yaml`, no blueprint, no restart.
+Reports your PV plant's current power to [wabenwatt.de](https://wabenwatt.de) every minute – no `configuration.yaml`, no blueprint.
 
 ## What it does
 
