@@ -83,3 +83,13 @@ Another plant? Add the integration again. Change sensors later via *Configure* o
 python -m venv .venv && .venv/bin/pip install -r requirements_test.txt
 .venv/bin/pytest
 ```
+
+## Releases
+
+HACS offers GitHub releases as installable versions, so every release is a tag — never a moving branch:
+
+1. Bump `version` in `custom_components/wabenwatt/manifest.json` **and** `pyproject.toml` (same value), commit.
+2. Tag that commit `vX.Y.Z` and push the tag: `git tag v0.3.0 && git push origin v0.3.0`.
+3. The `Release` workflow refuses a tag whose version does not match, runs lint and tests, and only then creates the GitHub release with generated notes.
+
+Never move or delete a published tag; ship a fix as the next version.
