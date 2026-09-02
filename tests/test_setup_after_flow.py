@@ -21,7 +21,11 @@ from homeassistant.data_entry_flow import FlowResultType
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.wabenwatt.const import CONF_PV_SENSORS, DOMAIN
+from custom_components.wabenwatt.const import (
+    CONF_PV_SENSORS,
+    DOMAIN,
+    SOURCE_TYPE_PV,
+)
 
 from .conftest import TOKEN
 
@@ -41,6 +45,10 @@ async def test_initial_setup_sends_exactly_one_report(
 ) -> None:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    # Two device types, so the type menu comes first (docs/41-sites-and-batteries.md).
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": SOURCE_TYPE_PV}
     )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], user_input=PV_INPUT

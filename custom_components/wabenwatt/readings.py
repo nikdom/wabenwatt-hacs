@@ -12,6 +12,8 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 
+from .const import PERCENT_UNITS
+
 # A sensor without unit is taken as watts (template sensors often have none);
 # the API's plausibility check still catches a kW value sent as W.
 _WATT_FACTORS: dict[str | None, float] = {
@@ -40,12 +42,29 @@ class SensorNotPowerError(Exception):
         self.unit = unit
 
 
+class SensorNotPercentError(Exception):
+    """The entity is not a percentage sensor (state of charge)."""
+
+    def __init__(self, entity_id: str, unit: str | None) -> None:
+        super().__init__(f"{entity_id} is not a percentage sensor (unit {unit!r})")
+        self.entity_id = entity_id
+        self.unit = unit
+
+
 @dataclass(frozen=True)
 class PlantReading:
-    """What gets reported: whole watts, battery positive = discharging."""
+    """What a PV plant reports: whole watts of solar power."""
 
     pv_power_w: int
-    battery_power_w: int | None
+
+
+@dataclass(frozen=True)
+class BatteryReading:
+    """What a battery device reports: whole watts, positive = discharging,
+    plus the state of charge when a sensor for it is configured."""
+
+    battery_power_w: int
+    soc_percent: int | None
 
 
 def read_power_w(hass: HomeAssistant, entity_id: str) -> float:
@@ -65,12 +84,28 @@ def read_power_w(hass: HomeAssistant, entity_id: str) -> float:
     return value * _WATT_FACTORS[unit]
 
 
-def read_plant(
-    hass: HomeAssistant,
-    pv_sensors: list[str],
-    battery_sensor: str | None,
-    battery_invert: bool,
-) -> PlantReading:
+def read_percent(hass: HomeAssistant, entity_id: str) -> float:
+    """Return a percentage sensor's current value, 0-100."""
+    state = hass.states.get(entity_id)
+    if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN, ""):
+        raise SensorUnavailableError(entity_id)
+    unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+    # Unlike power, percent has no sensible unitless default: a state of charge
+    # in kWh or W is a wrongly picked entity, not a unit to convert.
+    if unit not in PERCENT_UNITS:
+        raise SensorNotPercentError(entity_id, unit)
+    try:
+        value = float(state.state)
+    except ValueError as err:
+        raise SensorNotPercentError(entity_id, unit) from err
+    if not math.isfinite(value):
+        raise SensorUnavailableError(entity_id)
+    # Clamp rather than reject: a battery reporting 100.4 % is a rounding
+    # artefact of the BMS, not a broken configuration, and the API takes 0-100.
+    return min(100.0, max(0.0, value))
+
+
+def read_plant(hass: HomeAssistant, pv_sensors: list[str]) -> PlantReading:
     """Combine the configured sensors into one report.
 
     Every configured sensor has to deliver a value: summing only the strings
@@ -78,14 +113,20 @@ def read_plant(
     nothing lets the plant turn inactive, which is the honest signal.
     """
     pv_total = sum(read_power_w(hass, entity_id) for entity_id in pv_sensors)
-    battery: float | None = None
-    if battery_sensor:
-        battery = read_power_w(hass, battery_sensor)
-        if battery_invert:
-            battery = -battery
     # A few negative watts at night are the inverter's standby draw, which is
     # consumption, not production; the API requires powerW >= 0.
-    return PlantReading(
-        pv_power_w=max(0, round(pv_total)),
-        battery_power_w=None if battery is None else round(battery),
-    )
+    return PlantReading(pv_power_w=max(0, round(pv_total)))
+
+
+def read_battery(
+    hass: HomeAssistant,
+    battery_sensor: str,
+    battery_invert: bool,
+    soc_sensor: str | None,
+) -> BatteryReading:
+    """Read a battery device: power (and optionally its state of charge)."""
+    power = read_power_w(hass, battery_sensor)
+    if battery_invert:
+        power = -power
+    soc = None if soc_sensor is None else round(read_percent(hass, soc_sensor))
+    return BatteryReading(battery_power_w=round(power), soc_percent=soc)

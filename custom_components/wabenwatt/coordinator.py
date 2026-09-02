@@ -25,15 +25,24 @@ from .const import (
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
     CONF_PV_SENSORS,
+    CONF_SOC_SENSOR,
+    CONF_SOURCE_TYPE,
     DOMAIN,
     REPORT_INTERVAL,
+    SOURCE_TYPE_BATTERY,
 )
 from .readings import (
+    BatteryReading,
     PlantReading,
+    SensorNotPercentError,
     SensorNotPowerError,
     SensorUnavailableError,
+    read_battery,
     read_plant,
 )
+
+# One reading type per device; the entities pick what they can show from it.
+type DeviceReading = PlantReading | BatteryReading
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -71,14 +80,14 @@ class ReporterState:
 
     status: str = STATUS_OK
     last_report_at: datetime | None = None
-    last_reading: PlantReading | None = None
+    last_reading: DeviceReading | None = None
     last_error: ReportError | None = None
     # Entity that blocked the last attempt (unavailable or not a power sensor).
     blocking_entity: str | None = None
 
 
 def stash_first_report(
-    hass: HomeAssistant, unique_id: str, reading: PlantReading, at: datetime
+    hass: HomeAssistant, unique_id: str, reading: DeviceReading, at: datetime
 ) -> None:
     """Remember a report the config/options flow already sent as its
     validation, so setup can seed the coordinator from it instead of sending
@@ -92,7 +101,7 @@ def stash_first_report(
 
 def pop_pending_report(
     hass: HomeAssistant, unique_id: str | None
-) -> tuple[PlantReading, datetime] | None:
+) -> tuple[DeviceReading, datetime] | None:
     """Take back a stashed report, if any and not stale."""
     if unique_id is None:
         return None
@@ -103,6 +112,39 @@ def pop_pending_report(
     if dt_util.utcnow() - at > _PENDING_REPORT_MAX_AGE:
         return None
     return pending
+
+
+def read_device(
+    hass: HomeAssistant,
+    source_type: str,
+    *,
+    pv_sensors: list[str],
+    battery_sensor: str | None,
+    battery_invert: bool,
+    soc_sensor: str | None,
+) -> DeviceReading:
+    """Read whatever this entry's device type needs.
+
+    One place for the branch, used by the coordinator AND by the config flow's
+    validation — the two must never disagree about what a type reads, or setup
+    would validate something the coordinator then does not send.
+    """
+    if source_type == SOURCE_TYPE_BATTERY:
+        # A battery entry always has its power sensor; the flow requires it.
+        assert battery_sensor is not None
+        return read_battery(hass, battery_sensor, battery_invert, soc_sensor)
+    return read_plant(hass, pv_sensors)
+
+
+async def send_reading(client: WabenwattClient, reading: DeviceReading) -> None:
+    """Post a reading through the endpoint its type belongs to."""
+    if isinstance(reading, BatteryReading):
+        await client.report_battery(
+            battery_power_w=reading.battery_power_w,
+            soc_percent=reading.soc_percent,
+        )
+    else:
+        await client.report(pv_power_w=reading.pv_power_w)
 
 
 class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
@@ -123,8 +165,16 @@ class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
         )
 
     @property
+    def source_type(self) -> str:
+        return str(self.config_entry.data.get(CONF_SOURCE_TYPE, "pv"))
+
+    @property
+    def is_battery(self) -> bool:
+        return self.source_type == SOURCE_TYPE_BATTERY
+
+    @property
     def pv_sensors(self) -> list[str]:
-        return list(self.config_entry.options[CONF_PV_SENSORS])
+        return list(self.config_entry.options.get(CONF_PV_SENSORS, []))
 
     @property
     def battery_sensor(self) -> str | None:
@@ -134,13 +184,22 @@ class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
     def battery_invert(self) -> bool:
         return bool(self.config_entry.options.get(CONF_BATTERY_INVERT, False))
 
+    @property
+    def soc_sensor(self) -> str | None:
+        return self.config_entry.options.get(CONF_SOC_SENSOR) or None
+
     async def _async_update_data(self) -> ReporterState:
         previous = self.data or ReporterState()
         now = dt_util.utcnow()
 
         try:
-            reading = read_plant(
-                self.hass, self.pv_sensors, self.battery_sensor, self.battery_invert
+            reading = read_device(
+                self.hass,
+                self.source_type,
+                pv_sensors=self.pv_sensors,
+                battery_sensor=self.battery_sensor,
+                battery_invert=self.battery_invert,
+                soc_sensor=self.soc_sensor,
             )
         except SensorUnavailableError as err:
             _LOGGER.debug("%s: skipping report, %s", self.name, err)
@@ -149,17 +208,15 @@ class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
                 status=STATUS_SENSOR_UNAVAILABLE,
                 blocking_entity=err.entity_id,
             )
-        except SensorNotPowerError as err:
+        except (SensorNotPowerError, SensorNotPercentError) as err:
             return self._failed(
                 previous, ERROR_SENSOR_NOT_POWER, str(err), now, blocking=err.entity_id
             )
 
         try:
-            await self.client.report(
-                pv_power_w=reading.pv_power_w, battery_power_w=reading.battery_power_w
-            )
+            await send_reading(self.client, reading)
         except InvalidTokenError as err:
-            raise ConfigEntryAuthFailed("plant token unknown or revoked") from err
+            raise ConfigEntryAuthFailed("device token unknown or revoked") from err
         except RateLimitedError:
             return self._failed(previous, ERROR_RATE_LIMITED, "too many reports", now)
         except ReportRejectedError as err:

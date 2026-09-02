@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory, UnitOfPower
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -21,8 +21,19 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import WabenwattConfigEntry
-from .const import APP_URL, CONF_PLANT_ID, CONF_SOURCE_TYPE, DOMAIN, PLANT_PAGE_URL
+from .const import (
+    APP_URL,
+    BATTERY_PAGE_URL,
+    CONF_BATTERY_ID,
+    CONF_PLANT_ID,
+    CONF_SOURCE_TYPE,
+    DOMAIN,
+    PLANT_PAGE_URL,
+    SOURCE_TYPE_BATTERY,
+    SOURCE_TYPE_PV,
+)
 from .coordinator import STATUSES, ReporterState, WabenwattCoordinator
+from .readings import BatteryReading, PlantReading
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -31,7 +42,8 @@ class WabenwattSensorDescription(SensorEntityDescription):
 
     value_fn: Callable[[ReporterState], StateType | datetime]
     attributes_fn: Callable[[ReporterState], dict[str, Any]] | None = None
-    requires_battery: bool = False
+    # Which device types show this entity; None = all of them.
+    source_types: tuple[str, ...] | None = None
 
 
 def _error_attributes(state: ReporterState) -> dict[str, Any]:
@@ -73,8 +85,11 @@ SENSORS: tuple[WabenwattSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
+        source_types=(SOURCE_TYPE_PV,),
         value_fn=lambda state: (
-            state.last_reading.pv_power_w if state.last_reading else None
+            state.last_reading.pv_power_w
+            if isinstance(state.last_reading, PlantReading)
+            else None
         ),
     ),
     WabenwattSensorDescription(
@@ -83,9 +98,24 @@ SENSORS: tuple[WabenwattSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
-        requires_battery=True,
+        source_types=(SOURCE_TYPE_BATTERY,),
         value_fn=lambda state: (
-            state.last_reading.battery_power_w if state.last_reading else None
+            state.last_reading.battery_power_w
+            if isinstance(state.last_reading, BatteryReading)
+            else None
+        ),
+    ),
+    WabenwattSensorDescription(
+        key="reported_soc",
+        translation_key="reported_soc",
+        device_class=SensorDeviceClass.BATTERY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        source_types=(SOURCE_TYPE_BATTERY,),
+        value_fn=lambda state: (
+            state.last_reading.soc_percent
+            if isinstance(state.last_reading, BatteryReading)
+            else None
         ),
     ),
 )
@@ -96,13 +126,27 @@ async def async_setup_entry(
     entry: WabenwattConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create the entities for one plant."""
+    """Create the entities for one device."""
     coordinator = entry.runtime_data
     async_add_entities(
         WabenwattSensor(coordinator, description)
         for description in SENSORS
-        if not description.requires_battery or coordinator.battery_sensor
+        if _applies(description, coordinator)
     )
+
+
+def _applies(
+    description: WabenwattSensorDescription, coordinator: WabenwattCoordinator
+) -> bool:
+    """Whether this entity exists for the entry's device type and options."""
+    if (
+        description.source_types is not None
+        and coordinator.source_type not in description.source_types
+    ):
+        return False
+    # State of charge is optional even on a battery; without a sensor the
+    # entity would sit at "unknown" forever.
+    return description.key != "reported_soc" or coordinator.soc_sensor is not None
 
 
 class WabenwattSensor(CoordinatorEntity[WabenwattCoordinator], SensorEntity):
@@ -120,15 +164,23 @@ class WabenwattSensor(CoordinatorEntity[WabenwattCoordinator], SensorEntity):
         self.entity_description = description
         entry = coordinator.config_entry
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        plant_id = entry.data.get(CONF_PLANT_ID)
+        source_type = entry.data.get(CONF_SOURCE_TYPE, SOURCE_TYPE_PV)
+        device_id = entry.data.get(
+            CONF_BATTERY_ID if source_type == SOURCE_TYPE_BATTERY else CONF_PLANT_ID
+        )
+        page = (
+            BATTERY_PAGE_URL if source_type == SOURCE_TYPE_BATTERY else PLANT_PAGE_URL
+        )
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="Wabenwatt",
-            model=entry.data.get(CONF_SOURCE_TYPE, "pv").upper(),
+            model=source_type.upper(),
             entry_type=DeviceEntryType.SERVICE,
             configuration_url=(
-                PLANT_PAGE_URL.format(plant_id=plant_id) if plant_id else APP_URL
+                page.format(plant_id=device_id, battery_id=device_id)
+                if device_id
+                else APP_URL
             ),
         )
 

@@ -2,14 +2,16 @@
 
 [![Validate](https://github.com/nikdom/wabenwatt-hacs/actions/workflows/validate.yml/badge.svg)](https://github.com/nikdom/wabenwatt-hacs/actions/workflows/validate.yml)
 
-Meldet die aktuelle Leistung deiner PV-Anlage jede Minute an [wabenwatt.de](https://wabenwatt.de) – ohne `configuration.yaml`, ohne Blueprint. *English below.*
+Meldet die aktuelle Leistung deiner PV-Anlage und deines Hausspeichers jede Minute an [wabenwatt.de](https://wabenwatt.de) – ohne `configuration.yaml`, ohne Blueprint. *English below.*
 
 ## Was die Integration tut
 
-- Pro Anlage einmal hinzufügen: Token eintragen, Leistungssensor(en) wählen, fertig. Der Anlagenname kommt von wabenwatt – so siehst du sofort, ob du den richtigen Token erwischt hast. Beim Speichern geht sofort ein erster Report raus – die Anlage erscheint innerhalb von zwei Minuten als aktiv.
+- Pro **Gerät** einmal hinzufügen – PV-Anlage oder Hausspeicher: Token eintragen, Sensor(en) wählen, fertig. Der Anlagenname kommt von wabenwatt – so siehst du sofort, ob du den richtigen Token erwischt hast. Beim Speichern geht sofort ein erster Report raus – die Anlage erscheint innerhalb von zwei Minuten als aktiv.
 - Danach alle 60 Sekunden ein Report mit dem aktuellen Wert. `kW`-Sensoren werden nach Watt umgerechnet; mehrere String-Sensoren werden addiert.
 - Fehler sind in Home Assistant sichtbar: Entitäten **Status**, **Letzter Report**, **Letzter Fehler** und **Gemeldete Leistung**. Ein widerrufener Token löst die übliche „Erneut authentifizieren“-Meldung aus.
-- Optional ein Batterie-Sensor für Anlagen mit getrennter Batteriemessung (Hybrid-Wechselrichter), inklusive Schalter zum Umkehren des Vorzeichens.
+- **Hausspeicher als eigenes Gerät:** eigener Token, Leistungssensor (positiv = Entladung, mit Schalter zum Umkehren) und optional der Ladestand in Prozent. Entitäten **Gemeldete Batterieleistung** und **Gemeldeter Ladestand**.
+
+> **Geändert in 0.3.0:** Der Batterie-Sensor im PV-Formular ist entfallen. Ein Hausspeicher ist bei wabenwatt seit 2026-09-02 ein eigenes Gerät mit eigenem Token — er kann damit einen Ladestand melden, hängt nicht an einer Anlage und bleibt bestehen, wenn du die Anlage löschst. Wer den alten Weg genutzt hat: den Speicher auf wabenwatt.de anlegen und hier als zweites Gerät hinzufügen. Ein PV-Eintrag mit altem Batterie-Sensor meldet weiterhin, nur eben ohne Akkuwert.
 
 ## Installation
 
@@ -24,14 +26,14 @@ Oder manuell in HACS: *Integrationen → ⋮ → Benutzerdefinierte Repositories
 ## Einrichtung
 
 1. *Einstellungen → Geräte & Dienste → Integration hinzufügen → Wabenwatt*.
-2. Anlagen-Token eintragen – du findest ihn auf wabenwatt.de im Integrations-Tab der Anlage unter „Token anzeigen“. Mehr braucht es nicht: Name und Anlage ergeben sich aus dem Token.
+2. Gerätetyp wählen (**PV-Anlage** oder **Hausspeicher**) und den Token eintragen – du findest ihn auf wabenwatt.de auf der Seite des jeweiligen Geräts. Mehr braucht es nicht: Name und Gerät ergeben sich aus dem Token.
 3. Leistungssensor(en) wählen:
    - **Steckersolar** (Micro-Wechselrichter): der AC-Wert.
    - **String-/Hybrid-Wechselrichter:** die DC-Leistung der Strings – nicht der AC-Wert, der bei Hybridanlagen auch die Abgabe des Akkus enthält.
    - Keine Gesamt-Entität? Je String eine Entität wählen, die Werte werden addiert.
-4. Nur bei getrennter Batteriemessung: den Batterie-Sensor setzen (Wabenwatt erwartet positiv = Entladung; sonst „Vorzeichen umkehren“ einschalten).
+4. Beim **Hausspeicher** stattdessen: den Batterieleistungs-Sensor wählen (Wabenwatt erwartet positiv = Entladung; sonst „Vorzeichen umkehren“ einschalten) und optional den Ladestand-Sensor in Prozent.
 
-Weitere Anlage? Die Integration einfach noch einmal hinzufügen. Sensoren später ändern: *Konfigurieren* am Eintrag.
+Weiteres Gerät? Die Integration einfach noch einmal hinzufügen. Sensoren später ändern: *Konfigurieren* am Eintrag.
 
 ## Fehlersuche
 
@@ -39,7 +41,7 @@ Weitere Anlage? Die Integration einfach noch einmal hinzufügen. Sensoren späte
 |---|---|
 | **Meldet** | Der letzte Report wurde angenommen. |
 | **Sensor nicht verfügbar** | Ein gewählter Sensor liefert gerade keinen Zahlenwert (`unavailable`/`unknown`). Es wird bewusst **nichts** gesendet – ein Teilwert wäre falsch. Welcher Sensor blockiert, steht im Attribut `blocking_entity`. |
-| **Fehler** | Der Server hat den Report abgelehnt; Code und Meldung stehen in **Letzter Fehler** (z. B. `REPORT_REJECTED` = Wert unplausibel hoch, meist kW statt W; `BATTERY_NOT_SUPPORTED` = Anlage ist nicht für getrennte Batteriemessung eingerichtet). |
+| **Fehler** | Der Server hat den Report abgelehnt; Code und Meldung stehen in **Letzter Fehler** (z. B. `REPORT_REJECTED` = Wert unplausibel hoch, meist kW statt W; `REPORT_INVALID` = der Token gehört zum anderen Gerätetyp). |
 
 Ein `0`-Wert in der Nacht ist korrekt und wird gemeldet. Leicht negative Werte (Standby-Verbrauch) werden als `0` gesendet.
 
@@ -56,7 +58,9 @@ Reports your PV plant's current power to [wabenwatt.de](https://wabenwatt.de) ev
 - Add once per plant: enter the token, pick the power sensor(s), done. The plant's name comes from wabenwatt, so you see right away whether you grabbed the right token. A first report is sent on save, so the plant shows up as active within two minutes.
 - Afterwards one report every 60 seconds. `kW` sensors are converted to watts; several string sensors are added up.
 - Errors are visible in Home Assistant: **Status**, **Last report**, **Last error** and **Reported power** entities. A revoked token triggers the usual re-authentication notice.
-- Optional battery sensor for plants with separate battery metering (hybrid inverters), including a switch to invert the sign.
+- **Home storage as its own device:** its own token, a power sensor (positive = discharging, with a switch to invert) and optionally the state of charge in percent. Entities **Reported battery power** and **Reported state of charge**.
+
+> **Changed in 0.3.0:** the battery sensor is gone from the PV form. On wabenwatt a home battery has been its own device with its own token since 2026-09-02 — it can report a state of charge, does not hang off a plant, and survives that plant's deletion. If you used the old path: create the storage on wabenwatt.de and add it here as a second device. A PV entry with an old battery sensor keeps reporting, just without the battery value.
 
 ## Installation
 
@@ -67,7 +71,7 @@ Via HACS: use the badge above, or add `https://github.com/nikdom/wabenwatt-hacs`
 1. *Settings → Devices & services → Add integration → Wabenwatt*.
 2. Enter the plant token from wabenwatt.de (plant → Integrations tab → “Show token”). That is all: name and plant follow from the token.
 3. Pick the power sensor(s): plug-in solar → the AC value; string/hybrid inverters → the DC power of the strings (not the AC value, which for hybrid systems includes the battery output). No total entity? Pick one per string, they are summed.
-4. Only with separate battery metering: set the battery sensor (positive = discharging; otherwise enable “Invert battery sign”).
+4. For **home storage** instead: pick the battery power sensor (positive = discharging; otherwise enable “Invert the sign”) and optionally the state-of-charge sensor in percent.
 
 Another plant? Add the integration again. Change sensors later via *Configure* on the entry.
 
@@ -77,7 +81,7 @@ Another plant? Add the integration again. Change sensors later via *Configure* o
 |---|---|
 | **Reporting** | The last report was accepted. |
 | **Sensor unavailable** | A selected sensor has no numeric value right now. Nothing is sent on purpose – a partial value would be wrong. The `blocking_entity` attribute names the sensor. |
-| **Error** | The server rejected the report; code and message are in **Last error** (e.g. `REPORT_REJECTED` = implausibly high, usually kW instead of W; `BATTERY_NOT_SUPPORTED` = plant not configured for separate battery metering). |
+| **Error** | The server rejected the report; code and message are in **Last error** (e.g. `REPORT_REJECTED` = implausibly high, usually kW instead of W; `REPORT_INVALID` = the token belongs to the other device type). |
 
 ## Development
 

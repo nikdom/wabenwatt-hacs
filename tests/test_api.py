@@ -51,11 +51,14 @@ async def test_success_sends_bearer_and_payload(
     api = WabenwattClient(client.session, "tok", url=str(client.make_url("/v1")))
 
     await api.report(pv_power_w=742)
-    await api.report(pv_power_w=742, battery_power_w=-300)
+    await api.report_battery(battery_power_w=-300, soc_percent=62)
+    # A battery without a state-of-charge sensor omits the key entirely.
+    await api.report_battery(battery_power_w=350)
 
     assert fake.requests == [
         ({"powerW": 742}, "Bearer tok"),
-        ({"pvPowerW": 742, "batteryPowerW": -300}, "Bearer tok"),
+        ({"batteryPowerW": -300, "socPercent": 62}, "Bearer tok"),
+        ({"batteryPowerW": 350}, "Bearer tok"),
     ]
 
 
@@ -90,14 +93,14 @@ async def test_rejection_carries_code_and_message(
 ) -> None:
     fake, client = endpoint
     fake.status = 422
-    fake.body = {"error": {"code": "BATTERY_NOT_SUPPORTED", "message": "nope"}}
+    fake.body = {"error": {"code": "REPORT_REJECTED", "message": "nope"}}
     api = WabenwattClient(client.session, "tok", url=str(client.make_url("/v1")))
 
     with pytest.raises(ReportRejectedError) as excinfo:
-        await api.report(pv_power_w=1, battery_power_w=0)
+        await api.report(pv_power_w=1)
 
     assert excinfo.value.status == 422
-    assert excinfo.value.code == "BATTERY_NOT_SUPPORTED"
+    assert excinfo.value.code == "REPORT_REJECTED"
     assert excinfo.value.message == "nope"
 
 

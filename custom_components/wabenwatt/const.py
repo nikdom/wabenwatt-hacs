@@ -14,25 +14,33 @@ REPORT_URL: Final = "https://reports.wabenwatt.de/v1"
 # lookup does not belong there.
 WHOAMI_URL: Final = "https://api.wabenwatt.de/api/v1/report/whoami"
 PLANT_PAGE_URL: Final = "https://wabenwatt.de/app/plants/{plant_id}"
+BATTERY_PAGE_URL: Final = "https://wabenwatt.de/app/batteries/{battery_id}"
 APP_URL: Final = "https://wabenwatt.de/app"
 REPORT_INTERVAL: Final = timedelta(seconds=60)
 REQUEST_TIMEOUT_SECONDS: Final = 15
 
 CONF_SOURCE_TYPE: Final = "source_type"
-# Known when whoami answered at setup; only used to link the plant page, never
-# sent with a report (the token identifies the plant).
+# Known when whoami answered at setup; only used to link the device page, never
+# sent with a report (the token identifies the device).
 CONF_PLANT_ID: Final = "plant_id"
+CONF_BATTERY_ID: Final = "battery_id"
 CONF_PV_SENSORS: Final = "pv_sensors"
+# Battery device (source type "battery"): its power sensor, the sign option, and
+# the optional state of charge.
 CONF_BATTERY_SENSOR: Final = "battery_sensor"
 CONF_BATTERY_INVERT: Final = "battery_invert"
+CONF_SOC_SENSOR: Final = "soc_sensor"
 
 SOURCE_TYPE_PV: Final = "pv"
+SOURCE_TYPE_BATTERY: Final = "battery"
 # The type step of the config flow is skipped while there is exactly one type.
-# Adding a type here makes the menu appear; existing entries keep working
-# because every entry stores its type.
-SOURCE_TYPES: Final[tuple[str, ...]] = (SOURCE_TYPE_PV,)
+# Every entry stores its type, so adding one never migrates existing entries.
+SOURCE_TYPES: Final[tuple[str, ...]] = (SOURCE_TYPE_PV, SOURCE_TYPE_BATTERY)
 
 DEFAULT_NAME: Final = "Wabenwatt"
 
 # API error codes the integration reacts to by name (docs/04-reporting.md).
 ERROR_BATTERY_NOT_SUPPORTED: Final = "BATTERY_NOT_SUPPORTED"
+
+# Percent, for the optional state-of-charge sensor of a battery device.
+PERCENT_UNITS: Final[frozenset[str]] = frozenset({"%"})

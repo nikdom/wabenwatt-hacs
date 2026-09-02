@@ -37,16 +37,21 @@ class ReportRejectedError(WabenwattError):
 
 
 @dataclass(frozen=True)
-class PlantInfo:
-    """What the token implies about its plant; the API sends nothing else."""
+class DeviceInfo:
+    """What the token implies about its device; the API sends nothing else.
 
-    plant_id: str
+    Since batteries became their own device, whoami answers with a
+    `deviceType` and either a plantId or a batteryId. An older API answers
+    without the field — treated as a plant, which is what it was.
+    """
+
+    device_type: str
+    device_id: str
     name: str
-    reports_battery_separately: bool
 
 
 class WabenwattClient:
-    """Talks to the API on behalf of one plant token."""
+    """Talks to the API on behalf of one device token."""
 
     def __init__(
         self,
@@ -64,16 +69,20 @@ class WabenwattClient:
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._token}"}
 
-    async def report(
-        self, *, pv_power_w: int, battery_power_w: int | None = None
-    ) -> None:
-        """Send one report; raises a WabenwattError subclass on failure."""
-        payload: dict[str, int]
-        if battery_power_w is None:
-            payload = {"powerW": pv_power_w}
-        else:
-            payload = {"pvPowerW": pv_power_w, "batteryPowerW": battery_power_w}
+    async def report(self, *, pv_power_w: int) -> None:
+        """Send one PV report; raises a WabenwattError subclass on failure."""
+        await self._post({"powerW": pv_power_w})
 
+    async def report_battery(
+        self, *, battery_power_w: int, soc_percent: int | None = None
+    ) -> None:
+        """Send one battery report (negative power = charging)."""
+        payload: dict[str, int | None] = {"batteryPowerW": battery_power_w}
+        if soc_percent is not None:
+            payload["socPercent"] = soc_percent
+        await self._post(payload)
+
+    async def _post(self, payload: dict[str, Any]) -> None:
         try:
             async with self._session.post(
                 self._url,
@@ -94,8 +103,8 @@ class WabenwattClient:
         except (aiohttp.ClientError, TimeoutError) as err:
             raise CannotConnectError(str(err) or type(err).__name__) from err
 
-    async def whoami(self) -> PlantInfo:
-        """Return the plant this token reports for.
+    async def whoami(self) -> DeviceInfo:
+        """Return the device this token reports for.
 
         Lives on the general API host, not the ingest host; an API without the
         endpoint answers 404, which surfaces as CannotConnectError so callers
@@ -116,11 +125,25 @@ class WabenwattClient:
                 body: Any = await response.json(content_type=None)
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
             raise CannotConnectError(str(err) or type(err).__name__) from err
+        # Checked, not assumed: the old code reached straight into the mapping
+        # and let TypeError stand in for "not an object". Reading deviceType
+        # with .get() first would raise AttributeError instead, which is not
+        # caught below — so the shape is verified up front.
+        if not isinstance(body, dict):
+            raise CannotConnectError("malformed whoami response")
         try:
-            return PlantInfo(
-                plant_id=str(body["plantId"]),
+            # deviceType is absent on an API from before batteries existed;
+            # such a token can only be a plant.
+            device_type = str(body.get("deviceType") or "plant")
+            device_id = (
+                str(body["batteryId"])
+                if device_type == "battery"
+                else str(body["plantId"])
+            )
+            return DeviceInfo(
+                device_type=device_type,
+                device_id=device_id,
                 name=str(body["name"]),
-                reports_battery_separately=bool(body["reportsBatterySeparately"]),
             )
         except (KeyError, TypeError) as err:
             raise CannotConnectError("malformed whoami response") from err

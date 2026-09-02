@@ -8,8 +8,8 @@ import pytest
 
 from custom_components.wabenwatt.api import (
     CannotConnectError,
+    DeviceInfo,
     InvalidTokenError,
-    PlantInfo,
     RateLimitedError,
     WabenwattClient,
 )
@@ -18,9 +18,15 @@ from custom_components.wabenwatt.api import (
 pytestmark = pytest.mark.usefixtures("socket_enabled")
 
 PLANT_BODY = {
+    "deviceType": "plant",
     "plantId": "5b7e1c3a-1234-4c9d-8e2f-0a1b2c3d4e5f",
     "name": "Balkon Süd",
     "reportsBatterySeparately": True,
+}
+BATTERY_BODY = {
+    "deviceType": "battery",
+    "batteryId": "7c8f2d4b-2345-4d0e-9f30-1b2c3d4e5f60",
+    "name": "Hausakku",
 }
 
 
@@ -57,14 +63,39 @@ def _client(client: TestClient) -> WabenwattClient:
 async def test_returns_the_plant(endpoint: tuple[FakeWhoami, TestClient]) -> None:
     fake, client = endpoint
 
-    plant = await _client(client).whoami()
+    device = await _client(client).whoami()
 
-    assert plant == PlantInfo(
-        plant_id="5b7e1c3a-1234-4c9d-8e2f-0a1b2c3d4e5f",
+    assert device == DeviceInfo(
+        device_type="plant",
+        device_id="5b7e1c3a-1234-4c9d-8e2f-0a1b2c3d4e5f",
         name="Balkon Süd",
-        reports_battery_separately=True,
     )
     assert fake.authorization == "Bearer tok"
+
+
+async def test_returns_the_battery(endpoint: tuple[FakeWhoami, TestClient]) -> None:
+    fake, client = endpoint
+    fake.body = BATTERY_BODY
+
+    assert await _client(client).whoami() == DeviceInfo(
+        device_type="battery",
+        device_id="7c8f2d4b-2345-4d0e-9f30-1b2c3d4e5f60",
+        name="Hausakku",
+    )
+
+
+# An API from before batteries existed answers without deviceType. Such a
+# token can only be a plant, and reading it as one keeps that API usable.
+async def test_missing_device_type_is_a_plant(
+    endpoint: tuple[FakeWhoami, TestClient],
+) -> None:
+    fake, client = endpoint
+    fake.body = {"plantId": "5b7e1c3a-1234-4c9d-8e2f-0a1b2c3d4e5f", "name": "Balkon"}
+
+    device = await _client(client).whoami()
+
+    assert device.device_type == "plant"
+    assert device.device_id == "5b7e1c3a-1234-4c9d-8e2f-0a1b2c3d4e5f"
 
 
 @pytest.mark.parametrize(
@@ -90,7 +121,17 @@ async def test_status_codes_map_to_errors(
         await _client(client).whoami()
 
 
-@pytest.mark.parametrize("body", [{"name": "x"}, [], "text", {"plantId": None}])
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"name": "x"},
+        [],
+        "text",
+        {"plantId": None},
+        # A battery answer without its id is as unusable as a plant one.
+        {"deviceType": "battery", "name": "x"},
+    ],
+)
 async def test_malformed_body_is_a_connection_error(
     endpoint: tuple[FakeWhoami, TestClient], body: object
 ) -> None:
