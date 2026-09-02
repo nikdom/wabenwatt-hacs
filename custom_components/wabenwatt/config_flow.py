@@ -24,6 +24,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from .api import (
@@ -46,7 +47,13 @@ from .const import (
     SOURCE_TYPE_PV,
     SOURCE_TYPES,
 )
-from .readings import SensorNotPowerError, SensorUnavailableError, read_plant
+from .coordinator import stash_first_report
+from .readings import (
+    PlantReading,
+    SensorNotPowerError,
+    SensorUnavailableError,
+    read_plant,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,22 +91,27 @@ def _options_from(user_input: Mapping[str, Any]) -> dict[str, Any]:
 
 async def _validate(
     hass: HomeAssistant, token: str, options: Mapping[str, Any]
-) -> tuple[FlowErrors, Placeholders, PlantInfo | None]:
+) -> tuple[FlowErrors, Placeholders, PlantInfo | None, PlantReading | None]:
     """Check token and sensors against the real API.
 
     Order: whoami (token, plant name, battery flag), then the sensors, then one
     real report — which doubles as the first data point, so the plant shows up
     as active right after setup. whoami is a convenience: an API without it
     must not block setup, the report validates the token just as well.
+
+    Returns the sent PlantReading on success so the caller can stash it
+    (stash_first_report) for the coordinator to reuse — sending a second
+    report immediately after this one would trip the server's minimum report
+    interval (see stash_first_report's docstring).
     """
     client = WabenwattClient(async_get_clientsession(hass), token)
     plant: PlantInfo | None
     try:
         plant = await client.whoami()
     except InvalidTokenError:
-        return {CONF_API_TOKEN: "invalid_token"}, {}, None
+        return {CONF_API_TOKEN: "invalid_token"}, {}, None, None
     except RateLimitedError:
-        return {"base": "rate_limited"}, {}, None
+        return {"base": "rate_limited"}, {}, None, None
     except CannotConnectError as err:
         _LOGGER.debug("whoami unavailable, continuing without plant name: %s", err)
         plant = None
@@ -109,7 +121,7 @@ async def _validate(
         and options.get(CONF_BATTERY_SENSOR)
         and not plant.reports_battery_separately
     ):
-        return {CONF_BATTERY_SENSOR: "battery_not_supported"}, {}, plant
+        return {CONF_BATTERY_SENSOR: "battery_not_supported"}, {}, plant, None
 
     try:
         reading = read_plant(
@@ -119,12 +131,13 @@ async def _validate(
             options.get(CONF_BATTERY_INVERT, False),
         )
     except SensorUnavailableError as err:
-        return {"base": "sensor_unavailable"}, {"entity_id": err.entity_id}, plant
+        return {"base": "sensor_unavailable"}, {"entity_id": err.entity_id}, plant, None
     except SensorNotPowerError as err:
         return (
             {"base": "sensor_not_power"},
             {"entity_id": err.entity_id, "unit": err.unit or "—"},
             plant,
+            None,
         )
 
     try:
@@ -132,20 +145,21 @@ async def _validate(
             pv_power_w=reading.pv_power_w, battery_power_w=reading.battery_power_w
         )
     except InvalidTokenError:
-        return {CONF_API_TOKEN: "invalid_token"}, {}, plant
+        return {CONF_API_TOKEN: "invalid_token"}, {}, plant, None
     except RateLimitedError:
-        return {"base": "rate_limited"}, {}, plant
+        return {"base": "rate_limited"}, {}, plant, None
     except ReportRejectedError as err:
         if err.code == ERROR_BATTERY_NOT_SUPPORTED:
-            return {CONF_BATTERY_SENSOR: "battery_not_supported"}, {}, plant
+            return {CONF_BATTERY_SENSOR: "battery_not_supported"}, {}, plant, None
         return (
             {"base": "report_rejected"},
             {"code": err.code, "message": err.message},
             plant,
+            None,
         )
     except CannotConnectError:
-        return {"base": "cannot_connect"}, {}, plant
-    return {}, {}, plant
+        return {"base": "cannot_connect"}, {}, plant, None
+    return {}, {}, plant, reading
 
 
 class WabenwattConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -172,8 +186,14 @@ class WabenwattConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(token_unique_id(token))
             self._abort_if_unique_id_configured()
             options = _options_from(user_input)
-            errors, placeholders, plant = await _validate(self.hass, token, options)
+            errors, placeholders, plant, reading = await _validate(
+                self.hass, token, options
+            )
             if not errors:
+                if reading is not None:
+                    stash_first_report(
+                        self.hass, token_unique_id(token), reading, dt_util.utcnow()
+                    )
                 data: dict[str, Any] = {
                     CONF_SOURCE_TYPE: SOURCE_TYPE_PV,
                     CONF_API_TOKEN: token,
@@ -217,10 +237,12 @@ class WabenwattConfigFlow(ConfigFlow, domain=DOMAIN):
             )
             if other is not None and other.entry_id != entry.entry_id:
                 return self.async_abort(reason="already_configured")
-            errors, placeholders, plant = await _validate(
+            errors, placeholders, plant, reading = await _validate(
                 self.hass, token, entry.options
             )
             if not errors:
+                if reading is not None:
+                    stash_first_report(self.hass, unique_id, reading, dt_util.utcnow())
                 data_updates: dict[str, Any] = {CONF_API_TOKEN: token}
                 if plant is None:
                     return self.async_update_reload_and_abort(
@@ -258,10 +280,18 @@ class WabenwattOptionsFlow(OptionsFlow):
         placeholders: Placeholders = {}
         if user_input is not None:
             options = _options_from(user_input)
-            errors, placeholders, _ = await _validate(
-                self.hass, self.config_entry.data[CONF_API_TOKEN], options
+            token = self.config_entry.data[CONF_API_TOKEN]
+            errors, placeholders, _plant, reading = await _validate(
+                self.hass, token, options
             )
             if not errors:
+                if reading is not None and self.config_entry.unique_id is not None:
+                    stash_first_report(
+                        self.hass,
+                        self.config_entry.unique_id,
+                        reading,
+                        dt_util.utcnow(),
+                    )
                 return self.async_create_entry(data=options)
 
         return self.async_show_form(

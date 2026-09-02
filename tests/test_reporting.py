@@ -92,8 +92,10 @@ async def test_server_error_shows_up_and_clears_on_recovery(
     mock_report.side_effect = None
     await _tick(hass)
     assert hass.states.get("sensor.test_plant_status").state == "ok"
-    # The last error is kept as information after recovery.
-    assert hass.states.get("sensor.test_plant_last_error").state == "RATE_LIMITED"
+    # Cleared on the next successful report, mirroring the server's own
+    # report:lasterror key (docs/04-reporting.md) — a sticky error would
+    # misrepresent a one-off blip as an ongoing problem forever.
+    assert hass.states.get("sensor.test_plant_last_error").state == "unknown"
 
 
 async def test_revoked_token_starts_reauth(

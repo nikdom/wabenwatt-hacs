@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -37,6 +37,12 @@ from .readings import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# How long a pending report (see stash_first_report) stays valid. Generous on
+# purpose: it only guards against an unusually slow setup, not against the
+# normal case, where it is picked up within milliseconds.
+_PENDING_REPORT_MAX_AGE = timedelta(minutes=1)
+_PENDING_REPORTS = "wabenwatt_pending_reports"
+
 STATUS_OK = "ok"
 STATUS_SENSOR_UNAVAILABLE = "sensor_unavailable"
 STATUS_ERROR = "error"
@@ -49,7 +55,10 @@ ERROR_CANNOT_CONNECT = "CANNOT_CONNECT"
 
 @dataclass(frozen=True)
 class ReportError:
-    """The most recent failure, kept until the next one replaces it."""
+    """The most recent failure. Cleared by the next successful report, same
+    as the server's own report:lasterror key (docs/04-reporting.md) — a
+    sticky error would misreport a one-off blip (e.g. the setup collision
+    below) as an ongoing problem forever."""
 
     code: str
     message: str
@@ -66,6 +75,34 @@ class ReporterState:
     last_error: ReportError | None = None
     # Entity that blocked the last attempt (unavailable or not a power sensor).
     blocking_entity: str | None = None
+
+
+def stash_first_report(
+    hass: HomeAssistant, unique_id: str, reading: PlantReading, at: datetime
+) -> None:
+    """Remember a report the config/options flow already sent as its
+    validation, so setup can seed the coordinator from it instead of sending
+    a second one. The server rejects two reports for the same plant within
+    REPORT_MIN_INTERVAL_SECONDS (25s, docs/04-reporting.md) with
+    RATE_LIMITED — without this, a plain config_entry_first_refresh() right
+    after the flow's own report hit that gate on essentially every setup and
+    every sensor change."""
+    hass.data.setdefault(_PENDING_REPORTS, {})[unique_id] = (reading, at)
+
+
+def pop_pending_report(
+    hass: HomeAssistant, unique_id: str | None
+) -> tuple[PlantReading, datetime] | None:
+    """Take back a stashed report, if any and not stale."""
+    if unique_id is None:
+        return None
+    pending = hass.data.get(_PENDING_REPORTS, {}).pop(unique_id, None)
+    if pending is None:
+        return None
+    _reading, at = pending
+    if dt_util.utcnow() - at > _PENDING_REPORT_MAX_AGE:
+        return None
+    return pending
 
 
 class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
@@ -130,12 +167,7 @@ class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
         except CannotConnectError as err:
             return self._failed(previous, ERROR_CANNOT_CONNECT, str(err), now)
 
-        return ReporterState(
-            status=STATUS_OK,
-            last_report_at=now,
-            last_reading=reading,
-            last_error=previous.last_error,
-        )
+        return ReporterState(status=STATUS_OK, last_report_at=now, last_reading=reading)
 
     def _failed(
         self,

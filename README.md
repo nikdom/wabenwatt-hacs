@@ -43,6 +43,8 @@ Weitere Anlage? Die Integration einfach noch einmal hinzufügen. Sensoren späte
 
 Ein `0`-Wert in der Nacht ist korrekt und wird gemeldet. Leicht negative Werte (Standby-Verbrauch) werden als `0` gesendet.
 
+**Letzter Fehler wird beim nächsten erfolgreichen Report gelöscht.** Steht dort dauerhaft `RATE_LIMITED`, obwohl die Anlage aktiv meldet: das war ein Bug bis v0.2.0 (behoben in v0.2.1) — der Setup-Validierungs-Report und der erste automatische Report lagen zu dicht beieinander und der zweite wurde vom Server abgelehnt; ein einmaliger, harmloser Treffer blieb aber für immer als „letzter Fehler" stehen. Aktualisieren auf v0.2.1 oder neuer behebt das.
+
 ---
 
 # Wabenwatt for Home Assistant
