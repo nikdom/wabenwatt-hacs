@@ -6,7 +6,7 @@ Meldet die aktuelle Leistung deiner PV-Anlage jede Minute an [wabenwatt.de](http
 
 ## Was die Integration tut
 
-- Pro Anlage einmal hinzufügen: Token eintragen, Leistungssensor(en) wählen, fertig. Beim Speichern geht sofort ein erster Report raus – die Anlage erscheint innerhalb von zwei Minuten als aktiv.
+- Pro Anlage einmal hinzufügen: Token eintragen, Leistungssensor(en) wählen, fertig. Der Anlagenname kommt von wabenwatt – so siehst du sofort, ob du den richtigen Token erwischt hast. Beim Speichern geht sofort ein erster Report raus – die Anlage erscheint innerhalb von zwei Minuten als aktiv.
 - Danach alle 60 Sekunden ein Report mit dem aktuellen Wert. `kW`-Sensoren werden nach Watt umgerechnet; mehrere String-Sensoren werden addiert.
 - Fehler sind in Home Assistant sichtbar: Entitäten **Status**, **Letzter Report**, **Letzter Fehler** und **Gemeldete Leistung**. Ein widerrufener Token löst die übliche „Erneut authentifizieren“-Meldung aus.
 - Optional ein Batterie-Sensor für Anlagen mit getrennter Batteriemessung (Hybrid-Wechselrichter), inklusive Schalter zum Umkehren des Vorzeichens.
@@ -24,7 +24,7 @@ Oder manuell in HACS: *Integrationen → ⋮ → Benutzerdefinierte Repositories
 ## Einrichtung
 
 1. *Einstellungen → Geräte & Dienste → Integration hinzufügen → Wabenwatt*.
-2. Anlagen-Token eintragen – du findest ihn auf wabenwatt.de im Integrations-Tab der Anlage unter „Token anzeigen“.
+2. Anlagen-Token eintragen – du findest ihn auf wabenwatt.de im Integrations-Tab der Anlage unter „Token anzeigen“. Mehr braucht es nicht: Name und Anlage ergeben sich aus dem Token.
 3. Leistungssensor(en) wählen:
    - **Steckersolar** (Micro-Wechselrichter): der AC-Wert.
    - **String-/Hybrid-Wechselrichter:** die DC-Leistung der Strings – nicht der AC-Wert, der bei Hybridanlagen auch die Abgabe des Akkus enthält.
@@ -51,7 +51,7 @@ Reports your PV plant's current power to [wabenwatt.de](https://wabenwatt.de) ev
 
 ## What it does
 
-- Add once per plant: enter the token, pick the power sensor(s), done. A first report is sent on save, so the plant shows up as active within two minutes.
+- Add once per plant: enter the token, pick the power sensor(s), done. The plant's name comes from wabenwatt, so you see right away whether you grabbed the right token. A first report is sent on save, so the plant shows up as active within two minutes.
 - Afterwards one report every 60 seconds. `kW` sensors are converted to watts; several string sensors are added up.
 - Errors are visible in Home Assistant: **Status**, **Last report**, **Last error** and **Reported power** entities. A revoked token triggers the usual re-authentication notice.
 - Optional battery sensor for plants with separate battery metering (hybrid inverters), including a switch to invert the sign.
@@ -63,7 +63,7 @@ Via HACS: use the badge above, or add `https://github.com/nikdom/wabenwatt-hacs`
 ## Setup
 
 1. *Settings → Devices & services → Add integration → Wabenwatt*.
-2. Enter the plant token from wabenwatt.de (plant → Integrations tab → “Show token”).
+2. Enter the plant token from wabenwatt.de (plant → Integrations tab → “Show token”). That is all: name and plant follow from the token.
 3. Pick the power sensor(s): plug-in solar → the AC value; string/hybrid inverters → the DC power of the strings (not the AC value, which for hybrid systems includes the battery output). No total entity? Pick one per string, they are summed.
 4. Only with separate battery metering: set the battery sensor (positive = discharging; otherwise enable “Invert battery sign”).
 

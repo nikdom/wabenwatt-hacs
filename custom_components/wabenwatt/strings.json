@@ -9,16 +9,14 @@
       },
       "pv": {
         "title": "Connect a PV plant",
-        "description": "Add the integration once per plant. The plant token is under “Show token” in the plant's Integrations tab on wabenwatt.de. A first report is sent right away, so the plant shows up as active within two minutes.",
+        "description": "Add the integration once per plant. The plant token is under “Show token” in the plant's Integrations tab on wabenwatt.de; the plant's name is taken over from there. A first report is sent right away, so the plant shows up as active within two minutes.",
         "data": {
-          "name": "Name",
           "api_token": "Plant token",
           "pv_sensors": "Solar power sensor(s)",
           "battery_sensor": "Battery power sensor (optional)",
           "battery_invert": "Invert battery sign"
         },
         "data_description": {
-          "name": "Shown in Home Assistant, e.g. the plant's name on wabenwatt.",
           "api_token": "Identifies the plant; every token belongs to exactly one plant.",
           "pv_sensors": "The plant's total solar power. Plug-in solar (micro inverter): the AC value. String or hybrid inverters: the DC power of the strings — not the AC value, which for hybrid systems also contains the battery output. No total entity? Select one entity per string; the values are added up.",
           "battery_sensor": "Only for plants with separate battery metering (hybrid inverter): the battery's power, which is not part of the DC value above. Otherwise leave empty — then only the solar power is reported.",
@@ -40,7 +38,7 @@
       "battery_not_supported": "This plant is not set up for separate battery metering on wabenwatt. Leave the battery sensor empty or change the plant's settings first.",
       "report_rejected": "wabenwatt rejected the test report: {code} — {message}",
       "rate_limited": "wabenwatt is rate limiting this plant. Wait a minute and try again.",
-      "cannot_connect": "Could not reach reports.wabenwatt.de. Check the internet connection and try again."
+      "cannot_connect": "Could not reach wabenwatt. Check the internet connection and try again."
     },
     "abort": {
       "already_configured": "A plant with this token is already set up.",
@@ -71,7 +69,7 @@
       "battery_not_supported": "This plant is not set up for separate battery metering on wabenwatt. Leave the battery sensor empty or change the plant's settings first.",
       "report_rejected": "wabenwatt rejected the test report: {code} — {message}",
       "rate_limited": "wabenwatt is rate limiting this plant. Wait a minute and try again.",
-      "cannot_connect": "Could not reach reports.wabenwatt.de. Check the internet connection and try again."
+      "cannot_connect": "Could not reach wabenwatt. Check the internet connection and try again."
     }
   },
   "entity": {

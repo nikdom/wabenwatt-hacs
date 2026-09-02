@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from unittest.mock import AsyncMock
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_API_TOKEN, CONF_NAME
+from homeassistant.const import CONF_API_TOKEN
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 import pytest
@@ -21,19 +22,25 @@ from custom_components.wabenwatt.config_flow import token_unique_id
 from custom_components.wabenwatt.const import (
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
+    CONF_PLANT_ID,
     CONF_PV_SENSORS,
     CONF_SOURCE_TYPE,
+    DEFAULT_NAME,
     DOMAIN,
     SOURCE_TYPE_PV,
 )
 
-from .conftest import TOKEN
+from .conftest import PLANT, PLANT_ID, TOKEN
 
 PV_INPUT = {
-    CONF_NAME: "Balkon",
     CONF_API_TOKEN: f"  {TOKEN}  ",
     CONF_PV_SENSORS: ["sensor.pv_string_1", "sensor.pv_string_2"],
 }
+
+
+@pytest.fixture(autouse=True)
+def _whoami_answers(mock_whoami: AsyncMock) -> None:
+    """Every flow here talks to whoami; tests that care request the mock."""
 
 
 async def _start_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult:
@@ -55,11 +62,12 @@ async def test_user_step_skips_type_menu_and_creates_entry(
     await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Named after the plant on wabenwatt, nothing typed by the user.
     assert result["title"] == "Balkon"
     assert result["data"] == {
         CONF_SOURCE_TYPE: SOURCE_TYPE_PV,
-        CONF_NAME: "Balkon",
         CONF_API_TOKEN: TOKEN,
+        CONF_PLANT_ID: PLANT_ID,
     }
     assert result["options"] == {
         CONF_PV_SENSORS: ["sensor.pv_string_1", "sensor.pv_string_2"],
@@ -71,6 +79,37 @@ async def test_user_step_skips_type_menu_and_creates_entry(
         "pv_power_w": 1242,
         "battery_power_w": None,
     }
+
+
+async def test_whoami_unavailable_falls_back_to_default_name(
+    hass: HomeAssistant, mock_report: AsyncMock, mock_whoami: AsyncMock, pv_states: None
+) -> None:
+    mock_whoami.side_effect = CannotConnectError("404")
+    result = await _start_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=PV_INPUT
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == DEFAULT_NAME
+    assert CONF_PLANT_ID not in result["data"]
+    # The report still validated the token.
+    assert mock_report.await_count >= 1
+
+
+async def test_whoami_rejecting_the_token_stops_before_any_report(
+    hass: HomeAssistant, mock_report: AsyncMock, mock_whoami: AsyncMock, pv_states: None
+) -> None:
+    mock_whoami.side_effect = InvalidTokenError()
+    result = await _start_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=PV_INPUT
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_API_TOKEN: "invalid_token"}
+    mock_report.assert_not_called()
 
 
 async def test_battery_sensor_is_sent_with_inverted_sign(
@@ -94,6 +133,22 @@ async def test_battery_sensor_is_sent_with_inverted_sign(
         "pv_power_w": 1242,
         "battery_power_w": -300,
     }
+
+
+async def test_battery_sensor_is_refused_before_the_report_when_plant_cannot_take_it(
+    hass: HomeAssistant, mock_report: AsyncMock, mock_whoami: AsyncMock, pv_states: None
+) -> None:
+    mock_whoami.return_value = replace(PLANT, reports_battery_separately=False)
+    hass.states.async_set("sensor.battery", "300", {"unit_of_measurement": "W"})
+    result = await _start_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={**PV_INPUT, CONF_BATTERY_SENSOR: "sensor.battery"},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_BATTERY_SENSOR: "battery_not_supported"}
+    mock_report.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -215,14 +270,16 @@ async def test_options_flow_replaces_sensors(
     assert mock_report.call_args.kwargs == {"pv_power_w": 1200, "battery_power_w": None}
 
 
-async def test_reauth_stores_the_new_token(
+async def test_reauth_stores_the_new_token_and_renames_along(
     hass: HomeAssistant,
     mock_report: AsyncMock,
+    mock_whoami: AsyncMock,
     pv_states: None,
     config_entry: MockConfigEntry,
 ) -> None:
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
+    mock_whoami.return_value = replace(PLANT, plant_id="other-id", name="Dach")
 
     result = await config_entry.start_reauth_flow(hass)
     assert result["type"] is FlowResultType.FORM
@@ -236,4 +293,6 @@ async def test_reauth_stores_the_new_token(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
     assert config_entry.data[CONF_API_TOKEN] == "new-token"
+    assert config_entry.data[CONF_PLANT_ID] == "other-id"
     assert config_entry.unique_id == token_unique_id("new-token")
+    assert config_entry.title == "Dach"

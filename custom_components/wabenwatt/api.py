@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import aiohttp
 
-from .const import REPORT_URL, REQUEST_TIMEOUT_SECONDS
+from .const import REPORT_URL, REQUEST_TIMEOUT_SECONDS, WHOAMI_URL
 
 
 class WabenwattError(Exception):
@@ -22,7 +23,7 @@ class InvalidTokenError(WabenwattError):
 
 
 class RateLimitedError(WabenwattError):
-    """429: too many reports for this plant."""
+    """429: too many requests for this plant."""
 
 
 class ReportRejectedError(WabenwattError):
@@ -35,15 +36,33 @@ class ReportRejectedError(WabenwattError):
         self.message = message
 
 
+@dataclass(frozen=True)
+class PlantInfo:
+    """What the token implies about its plant; the API sends nothing else."""
+
+    plant_id: str
+    name: str
+    reports_battery_separately: bool
+
+
 class WabenwattClient:
-    """Sends power reports for one plant."""
+    """Talks to the API on behalf of one plant token."""
 
     def __init__(
-        self, session: aiohttp.ClientSession, token: str, url: str = REPORT_URL
+        self,
+        session: aiohttp.ClientSession,
+        token: str,
+        url: str = REPORT_URL,
+        whoami_url: str = WHOAMI_URL,
     ) -> None:
         self._session = session
         self._token = token
         self._url = url
+        self._whoami_url = whoami_url
+
+    @property
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._token}"}
 
     async def report(
         self, *, pv_power_w: int, battery_power_w: int | None = None
@@ -59,7 +78,7 @@ class WabenwattClient:
             async with self._session.post(
                 self._url,
                 json=payload,
-                headers={"Authorization": f"Bearer {self._token}"},
+                headers=self._headers,
                 timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS),
             ) as response:
                 if response.status == 204:
@@ -74,6 +93,37 @@ class WabenwattClient:
                 raise CannotConnectError(f"unexpected status {response.status} {code}")
         except (aiohttp.ClientError, TimeoutError) as err:
             raise CannotConnectError(str(err) or type(err).__name__) from err
+
+    async def whoami(self) -> PlantInfo:
+        """Return the plant this token reports for.
+
+        Lives on the general API host, not the ingest host; an API without the
+        endpoint answers 404, which surfaces as CannotConnectError so callers
+        can treat the lookup as optional.
+        """
+        try:
+            async with self._session.get(
+                self._whoami_url,
+                headers=self._headers,
+                timeout=aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS),
+            ) as response:
+                if response.status == 401:
+                    raise InvalidTokenError
+                if response.status == 429:
+                    raise RateLimitedError
+                if response.status != 200:
+                    raise CannotConnectError(f"unexpected status {response.status}")
+                body: Any = await response.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            raise CannotConnectError(str(err) or type(err).__name__) from err
+        try:
+            return PlantInfo(
+                plant_id=str(body["plantId"]),
+                name=str(body["name"]),
+                reports_battery_separately=bool(body["reportsBatterySeparately"]),
+            )
+        except (KeyError, TypeError) as err:
+            raise CannotConnectError("malformed whoami response") from err
 
 
 async def _read_error(response: aiohttp.ClientResponse) -> tuple[str, str]:

@@ -5,14 +5,16 @@ from __future__ import annotations
 from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
-from homeassistant.const import CONF_API_TOKEN, CONF_NAME
+from homeassistant.const import CONF_API_TOKEN
 from homeassistant.core import HomeAssistant
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.wabenwatt.api import PlantInfo
 from custom_components.wabenwatt.config_flow import token_unique_id
 from custom_components.wabenwatt.const import (
     CONF_BATTERY_INVERT,
+    CONF_PLANT_ID,
     CONF_PV_SENSORS,
     CONF_SOURCE_TYPE,
     DOMAIN,
@@ -22,6 +24,8 @@ from custom_components.wabenwatt.const import (
 pytest_plugins = "pytest_homeassistant_custom_component"
 
 TOKEN = "plant-token-123"
+PLANT_ID = "5b7e1c3a-1234-4c9d-8e2f-0a1b2c3d4e5f"
+PLANT = PlantInfo(plant_id=PLANT_ID, name="Balkon", reports_battery_separately=True)
 
 
 @pytest.fixture(autouse=True)
@@ -31,12 +35,23 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
 
 @pytest.fixture
 def mock_report() -> Generator[AsyncMock]:
-    """Replace the HTTP call; the default is a successful 204."""
+    """Replace the report call; the default is a successful 204."""
     with patch(
         "custom_components.wabenwatt.api.WabenwattClient.report",
         new_callable=AsyncMock,
     ) as report:
         yield report
+
+
+@pytest.fixture
+def mock_whoami() -> Generator[AsyncMock]:
+    """Replace the whoami lookup; the default answers with PLANT."""
+    with patch(
+        "custom_components.wabenwatt.api.WabenwattClient.whoami",
+        new_callable=AsyncMock,
+        return_value=PLANT,
+    ) as whoami:
+        yield whoami
 
 
 @pytest.fixture
@@ -55,8 +70,8 @@ def config_entry(hass: HomeAssistant) -> MockConfigEntry:
         unique_id=token_unique_id(TOKEN),
         data={
             CONF_SOURCE_TYPE: SOURCE_TYPE_PV,
-            CONF_NAME: "Test plant",
             CONF_API_TOKEN: TOKEN,
+            CONF_PLANT_ID: PLANT_ID,
         },
         options={
             CONF_PV_SENSORS: ["sensor.pv_string_1", "sensor.pv_string_2"],

@@ -21,7 +21,7 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import WabenwattConfigEntry
-from .const import CONF_SOURCE_TYPE, DOMAIN
+from .const import APP_URL, CONF_PLANT_ID, CONF_SOURCE_TYPE, DOMAIN, PLANT_PAGE_URL
 from .coordinator import STATUSES, ReporterState, WabenwattCoordinator
 
 
@@ -120,13 +120,16 @@ class WabenwattSensor(CoordinatorEntity[WabenwattCoordinator], SensorEntity):
         self.entity_description = description
         entry = coordinator.config_entry
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        plant_id = entry.data.get(CONF_PLANT_ID)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="Wabenwatt",
             model=entry.data.get(CONF_SOURCE_TYPE, "pv").upper(),
             entry_type=DeviceEntryType.SERVICE,
-            configuration_url="https://wabenwatt.de/app",
+            configuration_url=(
+                PLANT_PAGE_URL.format(plant_id=plant_id) if plant_id else APP_URL
+            ),
         )
 
     @property
