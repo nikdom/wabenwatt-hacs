@@ -37,6 +37,17 @@ SOURCE_TYPE_BATTERY: Final = "battery"
 # Every entry stores its type, so adding one never migrates existing entries.
 SOURCE_TYPES: Final[tuple[str, ...]] = (SOURCE_TYPE_PV, SOURCE_TYPE_BATTERY)
 
+# whoami's deviceType is NOT the same vocabulary as the source types above: the
+# API calls a PV plant "plant" (docs/03-api.md), while the config flow's step is
+# "pv". Comparing them directly made every plant token look like neither type,
+# so both forms rejected it with opposite explanations (user report 2026-09-02).
+# Unknown values stay unmapped on purpose — a token whose type we cannot name
+# must not silently pass a type check.
+DEVICE_TYPE_BY_API_VALUE: Final[dict[str, str]] = {
+    "plant": SOURCE_TYPE_PV,
+    "battery": SOURCE_TYPE_BATTERY,
+}
+
 DEFAULT_NAME: Final = "Wabenwatt"
 
 # API error codes the integration reacts to by name (docs/04-reporting.md).

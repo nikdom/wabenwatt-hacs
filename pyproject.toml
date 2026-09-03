@@ -1,6 +1,6 @@
 [project]
 name = "wabenwatt-hacs"
-version = "0.3.0"
+version = "0.3.1"
 description = "Home Assistant integration that reports a PV plant's and a home battery's live power to wabenwatt.de"
 requires-python = ">=3.13"
 

@@ -7,7 +7,13 @@ from typing import Any
 
 import aiohttp
 
-from .const import REPORT_URL, REQUEST_TIMEOUT_SECONDS, WHOAMI_URL
+from .const import (
+    DEVICE_TYPE_BY_API_VALUE,
+    REPORT_URL,
+    REQUEST_TIMEOUT_SECONDS,
+    SOURCE_TYPE_BATTERY,
+    WHOAMI_URL,
+)
 
 
 class WabenwattError(Exception):
@@ -43,6 +49,9 @@ class DeviceInfo:
     Since batteries became their own device, whoami answers with a
     `deviceType` and either a plantId or a batteryId. An older API answers
     without the field — treated as a plant, which is what it was.
+
+    `device_type` is already translated into the integration's own vocabulary
+    (SOURCE_TYPE_*), never the raw API value — see DEVICE_TYPE_BY_API_VALUE.
     """
 
     device_type: str
@@ -134,10 +143,16 @@ class WabenwattClient:
         try:
             # deviceType is absent on an API from before batteries existed;
             # such a token can only be a plant.
-            device_type = str(body.get("deviceType") or "plant")
+            api_value = str(body.get("deviceType") or "plant")
+            device_type = DEVICE_TYPE_BY_API_VALUE.get(api_value)
+            if device_type is None:
+                # A device type this version does not know about. Reporting it
+                # as "some other type" is the honest answer; guessing would put
+                # the wrong sensors on it.
+                raise CannotConnectError(f"unknown device type {api_value!r}")
             device_id = (
                 str(body["batteryId"])
-                if device_type == "battery"
+                if device_type == SOURCE_TYPE_BATTERY
                 else str(body["plantId"])
             )
             return DeviceInfo(
