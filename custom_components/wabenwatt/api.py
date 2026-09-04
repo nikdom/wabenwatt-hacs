@@ -8,6 +8,8 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    CLIENT_HEADER,
+    CLIENT_MARKER,
     DEVICE_TYPE_BY_API_VALUE,
     REPORT_URL,
     REQUEST_TIMEOUT_SECONDS,
@@ -76,7 +78,13 @@ class WabenwattClient:
 
     @property
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Bearer {self._token}"}
+        # The marker rides in its own header rather than the User-Agent: HA's
+        # shared session owns that one, and overwriting it would cost us the
+        # core version it reports.
+        return {
+            "Authorization": f"Bearer {self._token}",
+            CLIENT_HEADER: CLIENT_MARKER,
+        }
 
     async def report(self, *, pv_power_w: int) -> None:
         """Send one PV report; raises a WabenwattError subclass on failure."""

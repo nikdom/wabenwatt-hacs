@@ -7,6 +7,14 @@ from typing import Final
 
 DOMAIN: Final = "wabenwatt"
 
+# Sent as the X-Wabenwatt-Client header so the platform can tell which release
+# is installed out there. Home Assistant's own User-Agent stays untouched — it
+# carries the HA core version, which is a different and equally useful number.
+# Kept in step with manifest.json by test_client_marker.py.
+INTEGRATION_VERSION: Final = "0.4.0"
+CLIENT_HEADER: Final = "X-Wabenwatt-Client"
+CLIENT_MARKER: Final = f"wabenwatt-homeassistant/{INTEGRATION_VERSION}"
+
 # Public ingest host; the endpoint answers 204 without a body on success.
 REPORT_URL: Final = "https://reports.wabenwatt.de/v1"
 # The plant behind a token. Deliberately on the general API host: the ingest
