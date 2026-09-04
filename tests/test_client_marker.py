@@ -12,7 +12,9 @@ from custom_components.wabenwatt.const import (
     INTEGRATION_VERSION,
 )
 
-MANIFEST = Path(__file__).parent.parent / "custom_components" / "wabenwatt" / "manifest.json"
+MANIFEST = (
+    Path(__file__).parent.parent / "custom_components" / "wabenwatt" / "manifest.json"
+)
 
 
 def test_version_matches_manifest() -> None:
