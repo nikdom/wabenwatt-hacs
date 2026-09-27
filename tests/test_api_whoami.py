@@ -13,7 +13,12 @@ from custom_components.wabenwatt.api import (
     RateLimitedError,
     WabenwattClient,
 )
-from custom_components.wabenwatt.const import SOURCE_TYPE_BATTERY, SOURCE_TYPE_PV
+from custom_components.wabenwatt.const import (
+    DEVICE_TYPE_SITE,
+    SOURCE_TYPE_BATTERY,
+    SOURCE_TYPE_METER,
+    SOURCE_TYPE_PV,
+)
 
 # The HA test plugin blocks sockets; these tests talk to a local fake server.
 pytestmark = pytest.mark.usefixtures("socket_enabled")
@@ -35,6 +40,16 @@ BATTERY_BODY = {
     "deviceType": "battery",
     "batteryId": "7c8f2d4b-2345-4d0e-9f30-1b2c3d4e5f60",
     "name": "Hausakku",
+}
+SITE_FIELDS = {
+    "siteId": "3a9d7e21-5678-4b1c-8d2e-2c3d4e5f6071",
+    "siteName": "Zuhause",
+}
+METER_BODY = {
+    "deviceType": "meter",
+    "meterId": "9e1a4f6c-3456-4e1f-a041-2c3d4e5f6071",
+    "name": "Hausanschluss",
+    **SITE_FIELDS,
 }
 
 
@@ -89,6 +104,54 @@ async def test_returns_the_battery(endpoint: tuple[FakeWhoami, TestClient]) -> N
         device_type=SOURCE_TYPE_BATTERY,
         device_id="7c8f2d4b-2345-4d0e-9f30-1b2c3d4e5f60",
         name="Hausakku",
+    )
+
+
+async def test_returns_the_meter_with_its_site(
+    endpoint: tuple[FakeWhoami, TestClient],
+) -> None:
+    fake, client = endpoint
+    fake.body = METER_BODY
+
+    assert await _client(client).whoami() == DeviceInfo(
+        device_type=SOURCE_TYPE_METER,
+        device_id="9e1a4f6c-3456-4e1f-a041-2c3d4e5f6071",
+        name="Hausanschluss",
+        site_id="3a9d7e21-5678-4b1c-8d2e-2c3d4e5f6071",
+    )
+
+
+async def test_plant_and_battery_carry_their_site(
+    endpoint: tuple[FakeWhoami, TestClient],
+) -> None:
+    fake, client = endpoint
+    for body in (PLANT_BODY, BATTERY_BODY):
+        fake.body = {**body, **SITE_FIELDS}
+        device = await _client(client).whoami()
+        assert device.site_id == SITE_FIELDS["siteId"]
+
+
+async def test_without_site_fields_the_site_is_unknown(
+    endpoint: tuple[FakeWhoami, TestClient],
+) -> None:
+    """An API from before sites existed; nothing to store, nothing breaks."""
+    _fake, client = endpoint
+    assert (await _client(client).whoami()).site_id is None
+
+
+async def test_a_site_token_is_named_as_such(
+    endpoint: tuple[FakeWhoami, TestClient],
+) -> None:
+    """Known by name, so the flow can say what it is instead of a generic
+    connection error; it is never one of the source types."""
+    fake, client = endpoint
+    fake.body = {"deviceType": "site", "name": "Zuhause", **SITE_FIELDS}
+
+    assert await _client(client).whoami() == DeviceInfo(
+        device_type=DEVICE_TYPE_SITE,
+        device_id=SITE_FIELDS["siteId"],
+        name="Zuhause",
+        site_id=SITE_FIELDS["siteId"],
     )
 
 
@@ -150,6 +213,7 @@ async def test_status_codes_map_to_errors(
         {"plantId": None},
         # A battery answer without its id is as unusable as a plant one.
         {"deviceType": "battery", "name": "x"},
+        {"deviceType": "meter", "name": "x", **SITE_FIELDS},
     ],
 )
 async def test_malformed_body_is_a_connection_error(

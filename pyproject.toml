@@ -1,7 +1,7 @@
 [project]
 name = "wabenwatt-hacs"
-version = "0.4.0"
-description = "Home Assistant integration that reports a PV plant's and a home battery's live power to wabenwatt.de"
+version = "0.5.0"
+description = "Home Assistant integration that reports the live power of a PV plant, a home battery and a grid meter to wabenwatt.de"
 requires-python = ">=3.13"
 
 [tool.pytest.ini_options]

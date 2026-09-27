@@ -14,6 +14,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.wabenwatt.api import (
     CannotConnectError,
+    DeviceInfo,
     InvalidTokenError,
     RateLimitedError,
     ReportRejectedError,
@@ -25,15 +26,27 @@ from custom_components.wabenwatt.const import (
     CONF_BATTERY_SENSOR,
     CONF_PLANT_ID,
     CONF_PV_SENSORS,
+    CONF_SITE_ID,
     CONF_SOC_SENSOR,
     CONF_SOURCE_TYPE,
     DEFAULT_NAME,
+    DEVICE_TYPE_SITE,
     DOMAIN,
     SOURCE_TYPE_BATTERY,
+    SOURCE_TYPE_METER,
     SOURCE_TYPE_PV,
 )
 
-from .conftest import BATTERY, BATTERY_ID, BATTERY_TOKEN, PLANT, PLANT_ID, TOKEN
+from .conftest import (
+    BATTERY,
+    BATTERY_ID,
+    BATTERY_TOKEN,
+    METER,
+    PLANT,
+    PLANT_ID,
+    SITE_ID,
+    TOKEN,
+)
 
 PV_INPUT = {
     CONF_API_TOKEN: f"  {TOKEN}  ",
@@ -63,10 +76,14 @@ async def _start_pv_flow(hass: HomeAssistant) -> config_entries.ConfigFlowResult
 async def test_user_step_offers_the_device_types(
     hass: HomeAssistant, mock_report: AsyncMock, pv_states: None
 ) -> None:
-    """Two device types, so the menu appears instead of jumping into the form."""
+    """Several device types, so the menu appears instead of jumping into the form."""
     result = await _start_flow(hass)
     assert result["type"] is FlowResultType.MENU
-    assert set(result["menu_options"]) == {SOURCE_TYPE_PV, SOURCE_TYPE_BATTERY}
+    assert result["menu_options"] == [
+        SOURCE_TYPE_PV,
+        SOURCE_TYPE_BATTERY,
+        SOURCE_TYPE_METER,
+    ]
 
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"next_step_id": SOURCE_TYPE_PV}
@@ -183,8 +200,66 @@ async def test_a_battery_token_on_the_pv_form_is_caught(
     )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {CONF_API_TOKEN: "wrong_token_pv"}
+    # Named after the type the token DOES belong to, so the message can point
+    # to the right menu entry now that there are more than two.
+    assert result["errors"] == {CONF_API_TOKEN: "token_is_battery"}
     mock_report.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("device", "error"),
+    [
+        (METER, "token_is_meter"),
+        (
+            DeviceInfo(
+                device_type=DEVICE_TYPE_SITE,
+                device_id=SITE_ID,
+                name="Zuhause",
+                site_id=SITE_ID,
+            ),
+            "token_is_site",
+        ),
+    ],
+)
+async def test_meter_and_site_tokens_on_the_pv_form_are_caught(
+    hass: HomeAssistant,
+    mock_report: AsyncMock,
+    mock_whoami: AsyncMock,
+    pv_states: None,
+    device: DeviceInfo,
+    error: str,
+) -> None:
+    """A site token reports nothing at all; it must not get past any form."""
+    mock_whoami.return_value = device
+    result = await _start_pv_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=PV_INPUT
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_API_TOKEN: error}
+    mock_report.assert_not_called()
+
+
+async def test_site_id_is_stored_when_whoami_names_it(
+    hass: HomeAssistant, mock_report: AsyncMock, mock_whoami: AsyncMock, pv_states: None
+) -> None:
+    """Kept for grouping the entries of one household later, without a
+    migration (docs/10-integrations.md)."""
+    mock_whoami.return_value = replace(PLANT, site_id=SITE_ID)
+    result = await _start_pv_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], user_input=PV_INPUT
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {
+        CONF_SOURCE_TYPE: SOURCE_TYPE_PV,
+        CONF_API_TOKEN: TOKEN,
+        CONF_PLANT_ID: PLANT_ID,
+        CONF_SITE_ID: SITE_ID,
+    }
 
 
 async def test_a_non_percent_soc_sensor_is_refused(

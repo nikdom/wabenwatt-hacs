@@ -36,24 +36,33 @@ from .api import (
     WabenwattClient,
 )
 from .const import (
-    CONF_BATTERY_ID,
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
-    CONF_PLANT_ID,
+    CONF_EXPORT_ENERGY_SENSOR,
+    CONF_GRID_EXPORT_SENSOR,
+    CONF_GRID_IMPORT_SENSOR,
+    CONF_GRID_INVERT,
+    CONF_GRID_SENSOR,
+    CONF_IMPORT_ENERGY_SENSOR,
     CONF_PV_SENSORS,
+    CONF_SITE_ID,
     CONF_SOC_SENSOR,
     CONF_SOURCE_TYPE,
     DEFAULT_NAME,
+    DEVICE_ID_CONF_BY_TYPE,
     DOMAIN,
     SOURCE_TYPE_BATTERY,
+    SOURCE_TYPE_METER,
     SOURCE_TYPE_PV,
     SOURCE_TYPES,
 )
 from .coordinator import DeviceReading, read_device, send_reading, stash_first_report
 from .readings import (
+    SensorNotEnergyError,
     SensorNotPercentError,
     SensorNotPowerError,
     SensorUnavailableError,
+    read_energy_wh,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -82,12 +91,37 @@ BATTERY_SENSOR_SCHEMA: dict[vol.Marker, Any] = {
 }
 
 
+# Grid power in exactly one of two forms: one signed sensor (with its sign
+# option) OR import and export power as two sensors. All optional in the schema
+# because a form cannot express "one of"; _meter_form_error checks it.
+METER_SENSOR_SCHEMA: dict[vol.Marker, Any] = {
+    vol.Optional(CONF_GRID_SENSOR): EntitySelector(
+        EntitySelectorConfig(domain="sensor")
+    ),
+    vol.Optional(CONF_GRID_INVERT, default=False): BooleanSelector(),
+    vol.Optional(CONF_GRID_IMPORT_SENSOR): EntitySelector(
+        EntitySelectorConfig(domain="sensor")
+    ),
+    vol.Optional(CONF_GRID_EXPORT_SENSOR): EntitySelector(
+        EntitySelectorConfig(domain="sensor")
+    ),
+    vol.Optional(CONF_IMPORT_ENERGY_SENSOR): EntitySelector(
+        EntitySelectorConfig(domain="sensor")
+    ),
+    vol.Optional(CONF_EXPORT_ENERGY_SENSOR): EntitySelector(
+        EntitySelectorConfig(domain="sensor")
+    ),
+}
+
+_SENSOR_SCHEMAS: dict[str, dict[vol.Marker, Any]] = {
+    SOURCE_TYPE_PV: PLANT_SENSOR_SCHEMA,
+    SOURCE_TYPE_BATTERY: BATTERY_SENSOR_SCHEMA,
+    SOURCE_TYPE_METER: METER_SENSOR_SCHEMA,
+}
+
+
 def sensor_schema(source_type: str) -> dict[vol.Marker, Any]:
-    return (
-        BATTERY_SENSOR_SCHEMA
-        if source_type == SOURCE_TYPE_BATTERY
-        else PLANT_SENSOR_SCHEMA
-    )
+    return _SENSOR_SCHEMAS.get(source_type, PLANT_SENSOR_SCHEMA)
 
 
 TOKEN_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
@@ -110,7 +144,34 @@ def _options_from(source_type: str, user_input: Mapping[str, Any]) -> dict[str, 
         if soc := user_input.get(CONF_SOC_SENSOR):
             options[CONF_SOC_SENSOR] = soc
         return options
+    if source_type == SOURCE_TYPE_METER:
+        options = {}
+        for key in (
+            CONF_GRID_SENSOR,
+            CONF_GRID_IMPORT_SENSOR,
+            CONF_GRID_EXPORT_SENSOR,
+            CONF_IMPORT_ENERGY_SENSOR,
+            CONF_EXPORT_ENERGY_SENSOR,
+        ):
+            if entity_id := user_input.get(key):
+                options[key] = entity_id
+        # The sign option belongs to the single-sensor form only; the
+        # two-sensor form has its direction in the field names.
+        if CONF_GRID_SENSOR in options:
+            options[CONF_GRID_INVERT] = bool(user_input.get(CONF_GRID_INVERT, False))
+        return options
     return {CONF_PV_SENSORS: list(user_input[CONF_PV_SENSORS])}
+
+
+def _meter_form_error(options: Mapping[str, Any]) -> str | None:
+    """Exactly one of the two grid power forms, complete — or an error key."""
+    single = CONF_GRID_SENSOR in options
+    pair = (CONF_GRID_IMPORT_SENSOR in options, CONF_GRID_EXPORT_SENSOR in options)
+    if single and not any(pair):
+        return None
+    if not single and all(pair):
+        return None
+    return "grid_power_form"
 
 
 async def _validate(
@@ -131,6 +192,9 @@ async def _validate(
     report immediately after this one would trip the server's minimum report
     interval (see stash_first_report's docstring).
     """
+    if source_type == SOURCE_TYPE_METER and (form_error := _meter_form_error(options)):
+        return {"base": form_error}, {}, None, None
+
     client = WabenwattClient(async_get_clientsession(hass), token)
     device: DeviceInfo | None
     try:
@@ -143,21 +207,22 @@ async def _validate(
         _LOGGER.debug("whoami unavailable, continuing without device name: %s", err)
         device = None
 
-    # A token for the other kind of device would be accepted by the form and
+    # A token for another kind of device would be accepted by the form and
     # then rejected by every single report. Caught here, while the user is
-    # still looking at the field they pasted it into.
+    # still looking at the field they pasted it into; the message names the
+    # type the token does belong to. A site token can report nothing at all.
     if device is not None and device.device_type != source_type:
-        return {CONF_API_TOKEN: f"wrong_token_{source_type}"}, {}, device, None
+        return {CONF_API_TOKEN: f"token_is_{device.device_type}"}, {}, device, None
 
     try:
-        reading = read_device(
-            hass,
-            source_type,
-            pv_sensors=list(options.get(CONF_PV_SENSORS, [])),
-            battery_sensor=options.get(CONF_BATTERY_SENSOR),
-            battery_invert=bool(options.get(CONF_BATTERY_INVERT, False)),
-            soc_sensor=options.get(CONF_SOC_SENSOR),
-        )
+        if source_type == SOURCE_TYPE_METER:
+            # At runtime a register without a value is only sent as null. At
+            # setup it must deliver one: that is the moment a wrongly picked
+            # entity can still be caught, as for every other sensor.
+            for key in (CONF_IMPORT_ENERGY_SENSOR, CONF_EXPORT_ENERGY_SENSOR):
+                if entity_id := options.get(key):
+                    read_energy_wh(hass, entity_id)
+        reading = read_device(hass, source_type, options)
     except SensorUnavailableError as err:
         return (
             {"base": "sensor_unavailable"},
@@ -179,6 +244,18 @@ async def _validate(
             device,
             None,
         )
+    except SensorNotEnergyError as err:
+        field = (
+            CONF_IMPORT_ENERGY_SENSOR
+            if options.get(CONF_IMPORT_ENERGY_SENSOR) == err.entity_id
+            else CONF_EXPORT_ENERGY_SENSOR
+        )
+        return (
+            {field: "sensor_not_energy"},
+            {"entity_id": err.entity_id, "unit": err.unit or "—"},
+            device,
+            None,
+        )
 
     try:
         await send_reading(client, reading)
@@ -196,6 +273,14 @@ async def _validate(
     except CannotConnectError:
         return {"base": "cannot_connect"}, {}, device, None
     return {}, {}, device, reading
+
+
+def _device_data(source_type: str, device: DeviceInfo) -> dict[str, Any]:
+    """The ids whoami named, as entry data."""
+    data: dict[str, Any] = {DEVICE_ID_CONF_BY_TYPE[source_type]: device.device_id}
+    if device.site_id is not None:
+        data[CONF_SITE_ID] = device.site_id
+    return data
 
 
 class WabenwattConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -223,6 +308,12 @@ class WabenwattConfigFlow(ConfigFlow, domain=DOMAIN):
         """Set up a home battery; needs its OWN token, not the plant's."""
         return await self._async_step_device(SOURCE_TYPE_BATTERY, user_input)
 
+    async def async_step_meter(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Set up a grid meter; its own token, like the battery."""
+        return await self._async_step_device(SOURCE_TYPE_METER, user_input)
+
     async def _async_step_device(
         self, source_type: str, user_input: dict[str, Any] | None
     ) -> ConfigFlowResult:
@@ -247,12 +338,7 @@ class WabenwattConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_API_TOKEN: token,
                 }
                 if device is not None:
-                    key = (
-                        CONF_BATTERY_ID
-                        if source_type == SOURCE_TYPE_BATTERY
-                        else CONF_PLANT_ID
-                    )
-                    data[key] = device.device_id
+                    data.update(_device_data(source_type, device))
                 return self.async_create_entry(
                     title=device.name if device is not None else DEFAULT_NAME,
                     data=data,
@@ -303,12 +389,7 @@ class WabenwattConfigFlow(ConfigFlow, domain=DOMAIN):
                         entry, unique_id=unique_id, data_updates=data_updates
                     )
                 # A rotated token may belong to another device: rename along.
-                key = (
-                    CONF_BATTERY_ID
-                    if source_type == SOURCE_TYPE_BATTERY
-                    else CONF_PLANT_ID
-                )
-                data_updates[key] = device.device_id
+                data_updates.update(_device_data(source_type, device))
                 return self.async_update_reload_and_abort(
                     entry,
                     unique_id=unique_id,

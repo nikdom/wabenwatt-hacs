@@ -5,7 +5,8 @@
         "title": "What do you want to connect?",
         "menu_options": {
           "pv": "PV plant",
-          "battery": "Home storage"
+          "battery": "Home storage",
+          "meter": "Grid meter"
         }
       },
       "pv": {
@@ -42,6 +43,28 @@
           "battery_invert": "Turn on if your sensor is positive while charging.",
           "soc_sensor": "The state of charge in percent. Optional — without it the storage reports only its power and cannot contribute to a hexagon balance later."
         }
+      },
+      "meter": {
+        "title": "Connect grid meter",
+        "description": "The meter at your grid connection is its own device with its own token. Create it on wabenwatt.de first — that is where you get the token. Give the grid power in exactly one of two forms: one signed sensor (positive = import, negative = export) or two sensors for import and export. Saving sends a first report right away.",
+        "data": {
+          "api_token": "Meter token",
+          "grid_sensor": "Grid power sensor (signed)",
+          "grid_invert": "Invert the sign",
+          "grid_import_sensor": "Import power sensor",
+          "grid_export_sensor": "Export power sensor",
+          "import_energy_sensor": "Import meter reading (optional)",
+          "export_energy_sensor": "Export meter reading (optional)"
+        },
+        "data_description": {
+          "api_token": "The meter's token — not a plant's or a storage's. You find it on wabenwatt.de on the meter's page.",
+          "grid_sensor": "Form 1: one sensor, positive while importing from the grid, negative while exporting — e.g. an SML reading head (16.7.0), Shelly 3EM/Pro 3EM “total_act_power”, evcc grid power. Leave empty if you use form 2.",
+          "grid_invert": "Form 1 only: turn on if your sensor is positive while exporting (e.g. “grid feed-in” of some inverter integrations).",
+          "grid_import_sensor": "Form 2: the import power (always ≥ 0), only together with the export sensor — e.g. Tibber Pulse “power” and “power_production”. Reported is import − export.",
+          "grid_export_sensor": "Form 2: the export power (always ≥ 0), only together with the import sensor.",
+          "import_energy_sensor": "Total import register (1.8.0) in Wh, kWh or MWh. Optional, only shown on the meter's page.",
+          "export_energy_sensor": "Total export register (2.8.0) in Wh, kWh or MWh. Optional, only shown on the meter's page."
+        }
       }
     },
     "error": {
@@ -52,8 +75,12 @@
       "rate_limited": "wabenwatt is rate limiting this plant. Wait a minute and try again.",
       "cannot_connect": "Could not reach wabenwatt. Check the internet connection and try again.",
       "sensor_not_percent": "{entity_id} is not a percentage sensor (unit: {unit}). Pick your storage's state-of-charge sensor.",
-      "wrong_token_pv": "This token belongs to a home storage, not a PV system. Add it via “Home storage” instead.",
-      "wrong_token_battery": "This token belongs to a PV system, not a home storage. Add it via “PV system” instead."
+      "grid_power_form": "Choose exactly one form for the grid power: either one signed sensor or both the import and the export sensor.",
+      "sensor_not_energy": "{entity_id} is not a meter reading (unit: {unit}). Pick an energy sensor in Wh, kWh or MWh.",
+      "token_is_pv": "This token belongs to a PV system. Add it via “PV system” instead.",
+      "token_is_battery": "This token belongs to a home storage. Add it via “Home storage” instead.",
+      "token_is_meter": "This token belongs to a grid meter. Add it via “Grid meter” instead.",
+      "token_is_site": "This is a site token — a site reports nothing itself. Use the token of the device (plant, home storage or grid meter) from its page on wabenwatt.de."
     },
     "abort": {
       "already_configured": "A plant with this token is already set up.",
@@ -69,13 +96,25 @@
           "pv_sensors": "Solar power sensor(s)",
           "battery_sensor": "Battery power sensor",
           "battery_invert": "Invert the sign",
-          "soc_sensor": "State-of-charge sensor (optional)"
+          "soc_sensor": "State-of-charge sensor (optional)",
+          "grid_sensor": "Grid power sensor (signed)",
+          "grid_invert": "Invert the sign",
+          "grid_import_sensor": "Import power sensor",
+          "grid_export_sensor": "Export power sensor",
+          "import_energy_sensor": "Import meter reading (optional)",
+          "export_energy_sensor": "Export meter reading (optional)"
         },
         "data_description": {
           "pv_sensors": "The plant's total solar power. Plug-in solar (micro inverter): the AC value. String or hybrid inverters: the DC power of the strings — not the AC value, which for hybrid systems also contains the battery output. No total entity? Select one entity per string; the values are added up.",
           "battery_sensor": "Your storage's power. wabenwatt expects positive = discharging.",
           "battery_invert": "Turn on if your sensor is positive while charging.",
-          "soc_sensor": "The state of charge in percent. Optional — without it the storage reports only its power and cannot contribute to a hexagon balance later."
+          "soc_sensor": "The state of charge in percent. Optional — without it the storage reports only its power and cannot contribute to a hexagon balance later.",
+          "grid_sensor": "Form 1: one sensor, positive while importing from the grid, negative while exporting — e.g. an SML reading head (16.7.0), Shelly 3EM/Pro 3EM “total_act_power”, evcc grid power. Leave empty if you use form 2.",
+          "grid_invert": "Form 1 only: turn on if your sensor is positive while exporting (e.g. “grid feed-in” of some inverter integrations).",
+          "grid_import_sensor": "Form 2: the import power (always ≥ 0), only together with the export sensor — e.g. Tibber Pulse “power” and “power_production”. Reported is import − export.",
+          "grid_export_sensor": "Form 2: the export power (always ≥ 0), only together with the import sensor.",
+          "import_energy_sensor": "Total import register (1.8.0) in Wh, kWh or MWh. Optional, only shown on the meter's page.",
+          "export_energy_sensor": "Total export register (2.8.0) in Wh, kWh or MWh. Optional, only shown on the meter's page."
         }
       }
     },
@@ -87,8 +126,12 @@
       "rate_limited": "wabenwatt is rate limiting this plant. Wait a minute and try again.",
       "cannot_connect": "Could not reach wabenwatt. Check the internet connection and try again.",
       "sensor_not_percent": "{entity_id} is not a percentage sensor (unit: {unit}). Pick your storage's state-of-charge sensor.",
-      "wrong_token_pv": "This token belongs to a home storage, not a PV system. Add it via “Home storage” instead.",
-      "wrong_token_battery": "This token belongs to a PV system, not a home storage. Add it via “PV system” instead."
+      "grid_power_form": "Choose exactly one form for the grid power: either one signed sensor or both the import and the export sensor.",
+      "sensor_not_energy": "{entity_id} is not a meter reading (unit: {unit}). Pick an energy sensor in Wh, kWh or MWh.",
+      "token_is_pv": "This token belongs to a PV system. Add it via “PV system” instead.",
+      "token_is_battery": "This token belongs to a home storage. Add it via “Home storage” instead.",
+      "token_is_meter": "This token belongs to a grid meter. Add it via “Grid meter” instead.",
+      "token_is_site": "This is a site token — a site reports nothing itself. Use the token of the device (plant, home storage or grid meter) from its page on wabenwatt.de."
     }
   },
   "entity": {
@@ -115,6 +158,9 @@
       },
       "reported_soc": {
         "name": "Reported state of charge"
+      },
+      "reported_grid_power": {
+        "name": "Reported grid power"
       }
     }
   }

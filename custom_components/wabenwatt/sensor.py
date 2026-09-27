@@ -24,16 +24,23 @@ from . import WabenwattConfigEntry
 from .const import (
     APP_URL,
     BATTERY_PAGE_URL,
-    CONF_BATTERY_ID,
-    CONF_PLANT_ID,
     CONF_SOURCE_TYPE,
+    DEVICE_ID_CONF_BY_TYPE,
     DOMAIN,
+    METER_PAGE_URL,
     PLANT_PAGE_URL,
     SOURCE_TYPE_BATTERY,
+    SOURCE_TYPE_METER,
     SOURCE_TYPE_PV,
 )
 from .coordinator import STATUSES, ReporterState, WabenwattCoordinator
-from .readings import BatteryReading, PlantReading
+from .readings import BatteryReading, MeterReading, PlantReading
+
+_PAGE_URL_BY_TYPE: dict[str, str] = {
+    SOURCE_TYPE_PV: PLANT_PAGE_URL,
+    SOURCE_TYPE_BATTERY: BATTERY_PAGE_URL,
+    SOURCE_TYPE_METER: METER_PAGE_URL,
+}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -118,6 +125,19 @@ SENSORS: tuple[WabenwattSensorDescription, ...] = (
             else None
         ),
     ),
+    WabenwattSensorDescription(
+        key="reported_grid_power",
+        translation_key="reported_grid_power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        source_types=(SOURCE_TYPE_METER,),
+        value_fn=lambda state: (
+            state.last_reading.grid_power_w
+            if isinstance(state.last_reading, MeterReading)
+            else None
+        ),
+    ),
 )
 
 
@@ -165,12 +185,8 @@ class WabenwattSensor(CoordinatorEntity[WabenwattCoordinator], SensorEntity):
         entry = coordinator.config_entry
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         source_type = entry.data.get(CONF_SOURCE_TYPE, SOURCE_TYPE_PV)
-        device_id = entry.data.get(
-            CONF_BATTERY_ID if source_type == SOURCE_TYPE_BATTERY else CONF_PLANT_ID
-        )
-        page = (
-            BATTERY_PAGE_URL if source_type == SOURCE_TYPE_BATTERY else PLANT_PAGE_URL
-        )
+        device_id = entry.data.get(DEVICE_ID_CONF_BY_TYPE[source_type])
+        page = _PAGE_URL_BY_TYPE[source_type]
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
@@ -178,7 +194,9 @@ class WabenwattSensor(CoordinatorEntity[WabenwattCoordinator], SensorEntity):
             model=source_type.upper(),
             entry_type=DeviceEntryType.SERVICE,
             configuration_url=(
-                page.format(plant_id=device_id, battery_id=device_id)
+                page.format(
+                    plant_id=device_id, battery_id=device_id, meter_id=device_id
+                )
                 if device_id
                 else APP_URL
             ),

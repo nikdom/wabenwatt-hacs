@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_TOKEN
@@ -24,25 +26,35 @@ from .api import (
 from .const import (
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
+    CONF_EXPORT_ENERGY_SENSOR,
+    CONF_GRID_EXPORT_SENSOR,
+    CONF_GRID_IMPORT_SENSOR,
+    CONF_GRID_INVERT,
+    CONF_GRID_SENSOR,
+    CONF_IMPORT_ENERGY_SENSOR,
     CONF_PV_SENSORS,
     CONF_SOC_SENSOR,
     CONF_SOURCE_TYPE,
     DOMAIN,
     REPORT_INTERVAL,
     SOURCE_TYPE_BATTERY,
+    SOURCE_TYPE_METER,
 )
 from .readings import (
     BatteryReading,
+    MeterReading,
     PlantReading,
+    SensorNotEnergyError,
     SensorNotPercentError,
     SensorNotPowerError,
     SensorUnavailableError,
     read_battery,
+    read_meter,
     read_plant,
 )
 
 # One reading type per device; the entities pick what they can show from it.
-type DeviceReading = PlantReading | BatteryReading
+type DeviceReading = PlantReading | BatteryReading | MeterReading
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -115,15 +127,9 @@ def pop_pending_report(
 
 
 def read_device(
-    hass: HomeAssistant,
-    source_type: str,
-    *,
-    pv_sensors: list[str],
-    battery_sensor: str | None,
-    battery_invert: bool,
-    soc_sensor: str | None,
+    hass: HomeAssistant, source_type: str, options: Mapping[str, Any]
 ) -> DeviceReading:
-    """Read whatever this entry's device type needs.
+    """Read whatever this entry's device type needs, from the entry's options.
 
     One place for the branch, used by the coordinator AND by the config flow's
     validation — the two must never disagree about what a type reads, or setup
@@ -131,9 +137,23 @@ def read_device(
     """
     if source_type == SOURCE_TYPE_BATTERY:
         # A battery entry always has its power sensor; the flow requires it.
-        assert battery_sensor is not None
-        return read_battery(hass, battery_sensor, battery_invert, soc_sensor)
-    return read_plant(hass, pv_sensors)
+        return read_battery(
+            hass,
+            options[CONF_BATTERY_SENSOR],
+            bool(options.get(CONF_BATTERY_INVERT, False)),
+            options.get(CONF_SOC_SENSOR) or None,
+        )
+    if source_type == SOURCE_TYPE_METER:
+        return read_meter(
+            hass,
+            grid_sensor=options.get(CONF_GRID_SENSOR) or None,
+            grid_invert=bool(options.get(CONF_GRID_INVERT, False)),
+            import_sensor=options.get(CONF_GRID_IMPORT_SENSOR) or None,
+            export_sensor=options.get(CONF_GRID_EXPORT_SENSOR) or None,
+            import_energy_sensor=options.get(CONF_IMPORT_ENERGY_SENSOR) or None,
+            export_energy_sensor=options.get(CONF_EXPORT_ENERGY_SENSOR) or None,
+        )
+    return read_plant(hass, list(options.get(CONF_PV_SENSORS, [])))
 
 
 async def send_reading(client: WabenwattClient, reading: DeviceReading) -> None:
@@ -142,6 +162,12 @@ async def send_reading(client: WabenwattClient, reading: DeviceReading) -> None:
         await client.report_battery(
             battery_power_w=reading.battery_power_w,
             soc_percent=reading.soc_percent,
+        )
+    elif isinstance(reading, MeterReading):
+        await client.report_meter(
+            grid_power_w=reading.grid_power_w,
+            import_energy_wh=reading.import_energy_wh,
+            export_energy_wh=reading.export_energy_wh,
         )
     else:
         await client.report(pv_power_w=reading.pv_power_w)
@@ -173,18 +199,6 @@ class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
         return self.source_type == SOURCE_TYPE_BATTERY
 
     @property
-    def pv_sensors(self) -> list[str]:
-        return list(self.config_entry.options.get(CONF_PV_SENSORS, []))
-
-    @property
-    def battery_sensor(self) -> str | None:
-        return self.config_entry.options.get(CONF_BATTERY_SENSOR) or None
-
-    @property
-    def battery_invert(self) -> bool:
-        return bool(self.config_entry.options.get(CONF_BATTERY_INVERT, False))
-
-    @property
     def soc_sensor(self) -> str | None:
         return self.config_entry.options.get(CONF_SOC_SENSOR) or None
 
@@ -194,12 +208,7 @@ class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
 
         try:
             reading = read_device(
-                self.hass,
-                self.source_type,
-                pv_sensors=self.pv_sensors,
-                battery_sensor=self.battery_sensor,
-                battery_invert=self.battery_invert,
-                soc_sensor=self.soc_sensor,
+                self.hass, self.source_type, self.config_entry.options
             )
         except SensorUnavailableError as err:
             _LOGGER.debug("%s: skipping report, %s", self.name, err)
@@ -208,7 +217,11 @@ class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
                 status=STATUS_SENSOR_UNAVAILABLE,
                 blocking_entity=err.entity_id,
             )
-        except (SensorNotPowerError, SensorNotPercentError) as err:
+        except (
+            SensorNotPowerError,
+            SensorNotPercentError,
+            SensorNotEnergyError,
+        ) as err:
             return self._failed(
                 previous, ERROR_SENSOR_NOT_POWER, str(err), now, blocking=err.entity_id
             )

@@ -13,6 +13,7 @@ from custom_components.wabenwatt.api import (
     ReportRejectedError,
     WabenwattClient,
 )
+from custom_components.wabenwatt.const import NOT_CONFIGURED
 
 # The HA test plugin blocks sockets; these tests talk to a local fake server.
 pytestmark = pytest.mark.usefixtures("socket_enabled")
@@ -60,6 +61,45 @@ async def test_success_sends_bearer_and_payload(
         ({"batteryPowerW": -300, "socPercent": 62}, "Bearer tok"),
         ({"batteryPowerW": 350}, "Bearer tok"),
     ]
+
+
+# meterReportSchema (packages/shared/src/schemas/report.ts) is strict: exactly
+# these keys, gridPowerW required, the registers optional and nullable.
+METER_KEYS = {"gridPowerW", "importEnergyWh", "exportEnergyWh"}
+
+
+async def test_meter_wire_format(
+    endpoint: tuple[FakeEndpoint, TestClient],
+) -> None:
+    fake, client = endpoint
+    api = WabenwattClient(client.session, "tok", url=str(client.make_url("/v1")))
+
+    await api.report_meter(
+        grid_power_w=-1234, import_energy_wh=4567891, export_energy_wh=1234500
+    )
+    # A register whose sensor has no value right now is sent as null ...
+    await api.report_meter(
+        grid_power_w=0, import_energy_wh=None, export_energy_wh=1234500
+    )
+    # ... one without a sensor is left out entirely.
+    await api.report_meter(grid_power_w=250)
+    await api.report_meter(
+        grid_power_w=250, import_energy_wh=NOT_CONFIGURED, export_energy_wh=None
+    )
+
+    bodies = [body for body, _auth in fake.requests]
+    assert bodies == [
+        {"gridPowerW": -1234, "importEnergyWh": 4567891, "exportEnergyWh": 1234500},
+        {"gridPowerW": 0, "importEnergyWh": None, "exportEnergyWh": 1234500},
+        {"gridPowerW": 250},
+        {"gridPowerW": 250, "exportEnergyWh": None},
+    ]
+    for body in bodies:
+        assert set(body) <= METER_KEYS
+        # Integers on the wire, never 1234.0.
+        assert all(type(v) is int for v in body.values() if v is not None)
+        assert all(v >= 0 for k, v in body.items() if k != "gridPowerW" and v)
+    assert {auth for _body, auth in fake.requests} == {"Bearer tok"}
 
 
 @pytest.mark.parametrize(

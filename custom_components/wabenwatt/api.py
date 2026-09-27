@@ -11,11 +11,22 @@ from .const import (
     CLIENT_HEADER,
     CLIENT_MARKER,
     DEVICE_TYPE_BY_API_VALUE,
+    DEVICE_TYPE_SITE,
+    NOT_CONFIGURED,
     REPORT_URL,
     REQUEST_TIMEOUT_SECONDS,
     SOURCE_TYPE_BATTERY,
+    SOURCE_TYPE_METER,
     WHOAMI_URL,
+    NotConfigured,
 )
+
+# whoami's id field per device type; a plant is the default (older APIs).
+_ID_FIELD_BY_TYPE: dict[str, str] = {
+    SOURCE_TYPE_BATTERY: "batteryId",
+    SOURCE_TYPE_METER: "meterId",
+    DEVICE_TYPE_SITE: "siteId",
+}
 
 
 class WabenwattError(Exception):
@@ -53,12 +64,14 @@ class DeviceInfo:
     without the field — treated as a plant, which is what it was.
 
     `device_type` is already translated into the integration's own vocabulary
-    (SOURCE_TYPE_*), never the raw API value — see DEVICE_TYPE_BY_API_VALUE.
+    (SOURCE_TYPE_*, or DEVICE_TYPE_SITE), never the raw API value — see
+    DEVICE_TYPE_BY_API_VALUE. `site_id` is None on an API from before sites.
     """
 
     device_type: str
     device_id: str
     name: str
+    site_id: str | None = None
 
 
 class WabenwattClient:
@@ -97,6 +110,25 @@ class WabenwattClient:
         payload: dict[str, int | None] = {"batteryPowerW": battery_power_w}
         if soc_percent is not None:
             payload["socPercent"] = soc_percent
+        await self._post(payload)
+
+    async def report_meter(
+        self,
+        *,
+        grid_power_w: int,
+        import_energy_wh: int | None | NotConfigured = NOT_CONFIGURED,
+        export_energy_wh: int | None | NotConfigured = NOT_CONFIGURED,
+    ) -> None:
+        """Send one grid meter report (positive = import, negative = export).
+
+        A register without a sensor is left out; one whose sensor has no value
+        right now is sent as null.
+        """
+        payload: dict[str, int | None] = {"gridPowerW": grid_power_w}
+        if import_energy_wh is not NOT_CONFIGURED:
+            payload["importEnergyWh"] = import_energy_wh
+        if export_energy_wh is not NOT_CONFIGURED:
+            payload["exportEnergyWh"] = export_energy_wh
         await self._post(payload)
 
     async def _post(self, payload: dict[str, Any]) -> None:
@@ -158,15 +190,13 @@ class WabenwattClient:
                 # as "some other type" is the honest answer; guessing would put
                 # the wrong sensors on it.
                 raise CannotConnectError(f"unknown device type {api_value!r}")
-            device_id = (
-                str(body["batteryId"])
-                if device_type == SOURCE_TYPE_BATTERY
-                else str(body["plantId"])
-            )
+            id_field = _ID_FIELD_BY_TYPE.get(device_type, "plantId")
+            site_id = body.get("siteId")
             return DeviceInfo(
                 device_type=device_type,
-                device_id=device_id,
+                device_id=str(body[id_field]),
                 name=str(body["name"]),
+                site_id=None if site_id is None else str(site_id),
             )
         except (KeyError, TypeError) as err:
             raise CannotConnectError("malformed whoami response") from err
