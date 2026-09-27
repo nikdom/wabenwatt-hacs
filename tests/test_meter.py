@@ -516,9 +516,13 @@ async def test_meter_device_links_to_its_page(
     assert await hass.config_entries.async_setup(meter_entry.entry_id)
     await hass.async_block_till_done()
 
-    device = dr.async_get(hass).async_get_device_by_identifier(
-        (DOMAIN, meter_entry.entry_id), meter_entry.entry_id
+    # Lookup by config entry works on both the pinned CI release and newer HA,
+    # where identifier lookups were renamed.
+    devices = dr.async_entries_for_config_entry(
+        dr.async_get(hass), meter_entry.entry_id
     )
-    assert device is not None
+    assert len(devices) == 1
+    device = devices[0]
+    assert (DOMAIN, meter_entry.entry_id) in device.identifiers
     assert device.configuration_url == f"https://wabenwatt.de/app/meters/{METER_ID}"
     assert device.model == SOURCE_TYPE_METER.upper()

@@ -12,7 +12,7 @@ DOMAIN: Final = "wabenwatt"
 # is installed out there. Home Assistant's own User-Agent stays untouched — it
 # carries the HA core version, which is a different and equally useful number.
 # Kept in step with manifest.json by test_client_marker.py.
-INTEGRATION_VERSION: Final = "0.5.0"
+INTEGRATION_VERSION: Final = "0.5.1"
 CLIENT_HEADER: Final = "X-Wabenwatt-Client"
 CLIENT_MARKER: Final = f"wabenwatt-homeassistant/{INTEGRATION_VERSION}"
 
