@@ -52,18 +52,14 @@
           "grid_sensor": "Netzleistungs-Sensor (mit Vorzeichen)",
           "grid_invert": "Vorzeichen umkehren",
           "grid_import_sensor": "Bezugsleistungs-Sensor",
-          "grid_export_sensor": "Einspeiseleistungs-Sensor",
-          "import_energy_sensor": "Zählerstand Bezug (optional)",
-          "export_energy_sensor": "Zählerstand Einspeisung (optional)"
+          "grid_export_sensor": "Einspeiseleistungs-Sensor"
         },
         "data_description": {
           "api_token": "Der Token des Zählers – nicht der einer Anlage oder eines Speichers. Du findest ihn auf wabenwatt.de auf der Seite des Zählers.",
           "grid_sensor": "Form 1: ein Sensor, positiv bei Bezug aus dem Netz, negativ bei Einspeisung – z. B. SML-Lesekopf (16.7.0), Shelly 3EM/Pro 3EM „total_act_power“, evcc-Netzleistung. Leer lassen, wenn du Form 2 nutzt.",
           "grid_invert": "Nur für Form 1: einschalten, wenn dein Sensor bei Einspeisung positiv ist (z. B. „Netzeinspeisung“ mancher Wechselrichter-Integrationen).",
           "grid_import_sensor": "Form 2: die Bezugsleistung (immer ≥ 0), nur zusammen mit dem Einspeise-Sensor – z. B. Tibber Pulse „power“ und „power_production“. Gemeldet wird Bezug − Einspeisung.",
-          "grid_export_sensor": "Form 2: die Einspeiseleistung (immer ≥ 0), nur zusammen mit dem Bezugs-Sensor.",
-          "import_energy_sensor": "Zählerstand Bezug gesamt (1.8.0) in Wh, kWh oder MWh. Optional, nur zur Anzeige auf der Zählerseite.",
-          "export_energy_sensor": "Zählerstand Einspeisung gesamt (2.8.0) in Wh, kWh oder MWh. Optional, nur zur Anzeige auf der Zählerseite."
+          "grid_export_sensor": "Form 2: die Einspeiseleistung (immer ≥ 0), nur zusammen mit dem Bezugs-Sensor."
         }
       }
     },
@@ -76,7 +72,6 @@
       "cannot_connect": "wabenwatt ist nicht erreichbar. Prüfe die Internetverbindung und versuche es erneut.",
       "sensor_not_percent": "{entity_id} ist kein Prozent-Sensor (Einheit: {unit}). Wähle den Ladestand-Sensor deines Speichers.",
       "grid_power_form": "Wähle für die Netzleistung genau eine Form: entweder einen Sensor mit Vorzeichen oder beide Sensoren für Bezug und Einspeisung.",
-      "sensor_not_energy": "{entity_id} ist kein Zählerstand (Einheit: {unit}). Wähle einen Energie-Sensor in Wh, kWh oder MWh.",
       "token_is_pv": "Dieser Token gehört zu einer PV-Anlage. Füge sie über „PV-Anlage“ hinzu.",
       "token_is_battery": "Dieser Token gehört zu einem Hausspeicher. Füge ihn über „Hausspeicher“ hinzu.",
       "token_is_meter": "Dieser Token gehört zu einem Zähler. Füge ihn über „Zähler (Netzanschluss)“ hinzu.",
@@ -100,9 +95,7 @@
           "grid_sensor": "Netzleistungs-Sensor (mit Vorzeichen)",
           "grid_invert": "Vorzeichen umkehren",
           "grid_import_sensor": "Bezugsleistungs-Sensor",
-          "grid_export_sensor": "Einspeiseleistungs-Sensor",
-          "import_energy_sensor": "Zählerstand Bezug (optional)",
-          "export_energy_sensor": "Zählerstand Einspeisung (optional)"
+          "grid_export_sensor": "Einspeiseleistungs-Sensor"
         },
         "data_description": {
           "pv_sensors": "Die gesamte Solarleistung der Anlage. Bei Steckersolar (Micro-Wechselrichter) ist das der AC-Wert. Bei String- oder Hybrid-Wechselrichtern die DC-Leistung der Strings – nicht der AC-Wert, in dem bei Hybridanlagen auch die Abgabe des Akkus steckt. Keine Gesamt-Entität? Wähle je String eine Entität; die Werte werden addiert.",
@@ -112,9 +105,7 @@
           "grid_sensor": "Form 1: ein Sensor, positiv bei Bezug aus dem Netz, negativ bei Einspeisung – z. B. SML-Lesekopf (16.7.0), Shelly 3EM/Pro 3EM „total_act_power“, evcc-Netzleistung. Leer lassen, wenn du Form 2 nutzt.",
           "grid_invert": "Nur für Form 1: einschalten, wenn dein Sensor bei Einspeisung positiv ist (z. B. „Netzeinspeisung“ mancher Wechselrichter-Integrationen).",
           "grid_import_sensor": "Form 2: die Bezugsleistung (immer ≥ 0), nur zusammen mit dem Einspeise-Sensor – z. B. Tibber Pulse „power“ und „power_production“. Gemeldet wird Bezug − Einspeisung.",
-          "grid_export_sensor": "Form 2: die Einspeiseleistung (immer ≥ 0), nur zusammen mit dem Bezugs-Sensor.",
-          "import_energy_sensor": "Zählerstand Bezug gesamt (1.8.0) in Wh, kWh oder MWh. Optional, nur zur Anzeige auf der Zählerseite.",
-          "export_energy_sensor": "Zählerstand Einspeisung gesamt (2.8.0) in Wh, kWh oder MWh. Optional, nur zur Anzeige auf der Zählerseite."
+          "grid_export_sensor": "Form 2: die Einspeiseleistung (immer ≥ 0), nur zusammen mit dem Bezugs-Sensor."
         }
       }
     },
@@ -127,7 +118,6 @@
       "cannot_connect": "wabenwatt ist nicht erreichbar. Prüfe die Internetverbindung und versuche es erneut.",
       "sensor_not_percent": "{entity_id} ist kein Prozent-Sensor (Einheit: {unit}). Wähle den Ladestand-Sensor deines Speichers.",
       "grid_power_form": "Wähle für die Netzleistung genau eine Form: entweder einen Sensor mit Vorzeichen oder beide Sensoren für Bezug und Einspeisung.",
-      "sensor_not_energy": "{entity_id} ist kein Zählerstand (Einheit: {unit}). Wähle einen Energie-Sensor in Wh, kWh oder MWh.",
       "token_is_pv": "Dieser Token gehört zu einer PV-Anlage. Füge sie über „PV-Anlage“ hinzu.",
       "token_is_battery": "Dieser Token gehört zu einem Hausspeicher. Füge ihn über „Hausspeicher“ hinzu.",
       "token_is_meter": "Dieser Token gehört zu einem Zähler. Füge ihn über „Zähler (Netzanschluss)“ hinzu.",

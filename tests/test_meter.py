@@ -1,4 +1,4 @@
-"""Grid meter: flow, reading rules and the reporting cycle (0.5.0)."""
+"""Grid meter: flow, reading rules and the reporting cycle."""
 
 from __future__ import annotations
 
@@ -20,22 +20,18 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.wabenwatt.const import (
-    CONF_EXPORT_ENERGY_SENSOR,
     CONF_GRID_EXPORT_SENSOR,
     CONF_GRID_IMPORT_SENSOR,
     CONF_GRID_INVERT,
     CONF_GRID_SENSOR,
-    CONF_IMPORT_ENERGY_SENSOR,
     CONF_METER_ID,
     CONF_SITE_ID,
     CONF_SOURCE_TYPE,
     DOMAIN,
-    NOT_CONFIGURED,
     SOURCE_TYPE_METER,
 )
 from custom_components.wabenwatt.readings import (
     MeterReading,
-    SensorNotEnergyError,
     SensorNotPowerError,
     SensorUnavailableError,
     read_meter,
@@ -46,8 +42,6 @@ from .conftest import BATTERY, METER, METER_ID, METER_TOKEN, PLANT, SITE_ID
 SINGLE_INPUT: dict[str, Any] = {
     CONF_API_TOKEN: METER_TOKEN,
     CONF_GRID_SENSOR: "sensor.grid_power",
-    CONF_IMPORT_ENERGY_SENSOR: "sensor.grid_import_total",
-    CONF_EXPORT_ENERGY_SENSOR: "sensor.grid_export_total",
 }
 
 
@@ -82,8 +76,6 @@ def _read(hass: HomeAssistant, **overrides: Any) -> MeterReading:
         "grid_invert": False,
         "import_sensor": None,
         "export_sensor": None,
-        "import_energy_sensor": None,
-        "export_energy_sensor": None,
     }
     return read_meter(hass, **(kwargs | overrides))
 
@@ -114,15 +106,9 @@ async def test_meter_with_one_signed_sensor_creates_its_entry(
     assert result["options"] == {
         CONF_GRID_SENSOR: "sensor.grid_power",
         CONF_GRID_INVERT: False,
-        CONF_IMPORT_ENERGY_SENSOR: "sensor.grid_import_total",
-        CONF_EXPORT_ENERGY_SENSOR: "sensor.grid_export_total",
     }
-    # Negative stays negative (export), registers converted from kWh to Wh.
-    assert mock_report_meter.call_args_list[0].kwargs == {
-        "grid_power_w": -1234,
-        "import_energy_wh": 4567891,
-        "export_energy_wh": 1234500,
-    }
+    # Negative stays negative (export).
+    assert mock_report_meter.call_args_list[0].kwargs == {"grid_power_w": -1234}
     entry = result["result"]
     assert entry.state is ConfigEntryState.LOADED
     # The flow's own report seeds the coordinator; no second one.
@@ -151,11 +137,7 @@ async def test_meter_with_import_and_export_sensors(
         CONF_GRID_IMPORT_SENSOR: "sensor.import_power",
         CONF_GRID_EXPORT_SENSOR: "sensor.export_power",
     }
-    assert mock_report_meter.call_args_list[0].kwargs == {
-        "grid_power_w": 250,
-        "import_energy_wh": NOT_CONFIGURED,
-        "export_energy_wh": NOT_CONFIGURED,
-    }
+    assert mock_report_meter.call_args_list[0].kwargs == {"grid_power_w": 250}
 
 
 @pytest.mark.parametrize(
@@ -224,49 +206,6 @@ async def test_non_power_grid_sensor_is_refused(
     mock_report_meter.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    ("field", "unit", "shown"),
-    [
-        (CONF_IMPORT_ENERGY_SENSOR, "W", "W"),
-        (CONF_EXPORT_ENERGY_SENSOR, None, "—"),
-    ],
-)
-async def test_non_energy_register_is_refused_on_its_field(
-    hass: HomeAssistant,
-    mock_report_meter: AsyncMock,
-    meter_states: None,
-    field: str,
-    unit: str | None,
-    shown: str,
-) -> None:
-    attributes = {} if unit is None else {"unit_of_measurement": unit}
-    hass.states.async_set("sensor.wrong_register", "1000", attributes)
-    result = await _submit(hass, {**SINGLE_INPUT, field: "sensor.wrong_register"})
-
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {field: "sensor_not_energy"}
-    assert result["description_placeholders"] == {
-        "entity_id": "sensor.wrong_register",
-        "unit": shown,
-    }
-    mock_report_meter.assert_not_called()
-
-
-async def test_unavailable_register_blocks_setup(
-    hass: HomeAssistant, mock_report_meter: AsyncMock, meter_states: None
-) -> None:
-    """At runtime it would only become null — at setup it is the one chance to
-    catch a wrongly picked entity."""
-    hass.states.async_set("sensor.grid_import_total", "unavailable")
-    result = await _submit(hass, SINGLE_INPUT)
-
-    assert result["errors"] == {"base": "sensor_unavailable"}
-    assert result["description_placeholders"] == {
-        "entity_id": "sensor.grid_import_total"
-    }
-    mock_report_meter.assert_not_called()
-
-
 async def test_options_flow_switches_to_two_sensors(
     hass: HomeAssistant,
     mock_report_meter: AsyncMock,
@@ -294,11 +233,7 @@ async def test_options_flow_switches_to_two_sensors(
         CONF_GRID_IMPORT_SENSOR: "sensor.import_power",
         CONF_GRID_EXPORT_SENSOR: "sensor.export_power",
     }
-    assert mock_report_meter.call_args.kwargs == {
-        "grid_power_w": -500,
-        "import_energy_wh": NOT_CONFIGURED,
-        "export_energy_wh": NOT_CONFIGURED,
-    }
+    assert mock_report_meter.call_args.kwargs == {"grid_power_w": -500}
     assert hass.states.get("sensor.hausanschluss_reported_grid_power").state == "-500"
 
 
@@ -388,52 +323,6 @@ async def test_energy_power_unit_on_the_grid_sensor_is_refused(
         _read(hass)
 
 
-@pytest.mark.parametrize(
-    ("value", "unit", "expected"),
-    [
-        ("812345", "Wh", 812345),
-        ("812.3456", "kWh", 812346),
-        ("0.5", "MWh", 500000),
-        ("0", "kWh", 0),
-    ],
-)
-async def test_registers_are_converted_to_watt_hours(
-    hass: HomeAssistant, value: str, unit: str, expected: int
-) -> None:
-    hass.states.async_set("sensor.grid_power", "0", {"unit_of_measurement": "W"})
-    hass.states.async_set("sensor.register", value, {"unit_of_measurement": unit})
-    reading = _read(hass, import_energy_sensor="sensor.register")
-    assert reading.import_energy_wh == expected
-    assert reading.export_energy_wh is NOT_CONFIGURED
-
-
-@pytest.mark.parametrize(
-    ("state", "unit"),
-    [("unavailable", "kWh"), ("unknown", "kWh"), ("-3", "kWh"), ("nan", "kWh")],
-)
-async def test_register_without_a_value_becomes_null(
-    hass: HomeAssistant, state: str, unit: str
-) -> None:
-    """The power value carries the report; a missing register does not stop it."""
-    hass.states.async_set("sensor.grid_power", "-20", {"unit_of_measurement": "W"})
-    hass.states.async_set("sensor.register", state, {"unit_of_measurement": unit})
-    reading = _read(
-        hass,
-        import_energy_sensor="sensor.register",
-        export_energy_sensor="sensor.missing_entity",
-    )
-    assert reading == MeterReading(
-        grid_power_w=-20, import_energy_wh=None, export_energy_wh=None
-    )
-
-
-async def test_register_in_the_wrong_unit_is_an_error(hass: HomeAssistant) -> None:
-    hass.states.async_set("sensor.grid_power", "0", {"unit_of_measurement": "W"})
-    hass.states.async_set("sensor.register", "100", {"unit_of_measurement": "W"})
-    with pytest.raises(SensorNotEnergyError):
-        _read(hass, import_energy_sensor="sensor.register")
-
-
 # --- reporting cycle -------------------------------------------------------
 
 
@@ -453,9 +342,7 @@ async def test_meter_reports_and_exposes_grid_power(
     await hass.async_block_till_done()
 
     assert meter_entry.state is ConfigEntryState.LOADED
-    mock_report_meter.assert_awaited_once_with(
-        grid_power_w=-1234, import_energy_wh=4567891, export_energy_wh=1234500
-    )
+    mock_report_meter.assert_awaited_once_with(grid_power_w=-1234)
     mock_report.assert_not_called()
     grid = hass.states.get("sensor.hausanschluss_reported_grid_power")
     assert grid.state == "-1234"
@@ -469,23 +356,34 @@ async def test_meter_reports_and_exposes_grid_power(
     assert hass.states.get("sensor.hausanschluss_reported_battery_power") is None
 
 
-async def test_missing_register_is_reported_as_null(
+async def test_legacy_register_options_are_ignored(
     hass: HomeAssistant,
     mock_report_meter: AsyncMock,
     meter_states: None,
-    meter_entry: MockConfigEntry,
 ) -> None:
-    assert await hass.config_entries.async_setup(meter_entry.entry_id)
+    """Entries set up with 0.5.0 may still carry register sensors in their
+    options; they are neither read nor sent."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Hausanschluss",
+        unique_id="legacy-meter",
+        data={
+            CONF_SOURCE_TYPE: SOURCE_TYPE_METER,
+            CONF_API_TOKEN: METER_TOKEN,
+            CONF_METER_ID: METER_ID,
+        },
+        options={
+            CONF_GRID_SENSOR: "sensor.grid_power",
+            CONF_GRID_INVERT: False,
+            "import_energy_sensor": "sensor.grid_import_total",
+            "export_energy_sensor": "sensor.grid_export_total",
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    hass.states.async_set("sensor.grid_export_total", "unavailable")
 
-    await _tick(hass)
-
-    assert mock_report_meter.call_args.kwargs == {
-        "grid_power_w": -1234,
-        "import_energy_wh": 4567891,
-        "export_energy_wh": None,
-    }
+    mock_report_meter.assert_awaited_once_with(grid_power_w=-1234)
     assert hass.states.get("sensor.hausanschluss_status").state == "ok"
 
 

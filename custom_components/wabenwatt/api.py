@@ -12,13 +12,11 @@ from .const import (
     CLIENT_MARKER,
     DEVICE_TYPE_BY_API_VALUE,
     DEVICE_TYPE_SITE,
-    NOT_CONFIGURED,
     REPORT_URL,
     REQUEST_TIMEOUT_SECONDS,
     SOURCE_TYPE_BATTERY,
     SOURCE_TYPE_METER,
     WHOAMI_URL,
-    NotConfigured,
 )
 
 # whoami's id field per device type; a plant is the default (older APIs).
@@ -112,24 +110,9 @@ class WabenwattClient:
             payload["socPercent"] = soc_percent
         await self._post(payload)
 
-    async def report_meter(
-        self,
-        *,
-        grid_power_w: int,
-        import_energy_wh: int | None | NotConfigured = NOT_CONFIGURED,
-        export_energy_wh: int | None | NotConfigured = NOT_CONFIGURED,
-    ) -> None:
-        """Send one grid meter report (positive = import, negative = export).
-
-        A register without a sensor is left out; one whose sensor has no value
-        right now is sent as null.
-        """
-        payload: dict[str, int | None] = {"gridPowerW": grid_power_w}
-        if import_energy_wh is not NOT_CONFIGURED:
-            payload["importEnergyWh"] = import_energy_wh
-        if export_energy_wh is not NOT_CONFIGURED:
-            payload["exportEnergyWh"] = export_energy_wh
-        await self._post(payload)
+    async def report_meter(self, *, grid_power_w: int) -> None:
+        """Send one grid meter report (positive = import, negative = export)."""
+        await self._post({"gridPowerW": grid_power_w})
 
     async def _post(self, payload: dict[str, Any]) -> None:
         try:

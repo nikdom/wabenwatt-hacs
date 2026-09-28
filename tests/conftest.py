@@ -16,10 +16,8 @@ from custom_components.wabenwatt.const import (
     CONF_BATTERY_ID,
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
-    CONF_EXPORT_ENERGY_SENSOR,
     CONF_GRID_INVERT,
     CONF_GRID_SENSOR,
-    CONF_IMPORT_ENERGY_SENSOR,
     CONF_METER_ID,
     CONF_PLANT_ID,
     CONF_PV_SENSORS,
@@ -159,14 +157,8 @@ def battery_entry(hass: HomeAssistant) -> MockConfigEntry:
 
 @pytest.fixture
 def meter_states(hass: HomeAssistant) -> None:
-    """A household exporting 1.2 kW, with both registers in kWh."""
+    """A household exporting 1.2 kW."""
     hass.states.async_set("sensor.grid_power", "-1234.4", {"unit_of_measurement": "W"})
-    hass.states.async_set(
-        "sensor.grid_import_total", "4567.891", {"unit_of_measurement": "kWh"}
-    )
-    hass.states.async_set(
-        "sensor.grid_export_total", "1234.5", {"unit_of_measurement": "kWh"}
-    )
 
 
 @pytest.fixture
@@ -184,8 +176,6 @@ def meter_entry(hass: HomeAssistant) -> MockConfigEntry:
         options={
             CONF_GRID_SENSOR: "sensor.grid_power",
             CONF_GRID_INVERT: False,
-            CONF_IMPORT_ENERGY_SENSOR: "sensor.grid_import_total",
-            CONF_EXPORT_ENERGY_SENSOR: "sensor.grid_export_total",
         },
     )
     entry.add_to_hass(hass)

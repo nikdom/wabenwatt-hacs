@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from enum import Enum
 from typing import Final
 
 DOMAIN: Final = "wabenwatt"
@@ -46,13 +45,11 @@ CONF_BATTERY_INVERT: Final = "battery_invert"
 CONF_SOC_SENSOR: Final = "soc_sensor"
 # Grid meter (source type "meter"): EITHER one signed power sensor (positive =
 # import) with its sign option, OR two non-negative sensors for import and
-# export power. The register readings (1.8.0/2.8.0) are optional.
+# export power. Register readings (1.8.0/2.8.0) are not collected.
 CONF_GRID_SENSOR: Final = "grid_sensor"
 CONF_GRID_INVERT: Final = "grid_invert"
 CONF_GRID_IMPORT_SENSOR: Final = "grid_import_sensor"
 CONF_GRID_EXPORT_SENSOR: Final = "grid_export_sensor"
-CONF_IMPORT_ENERGY_SENSOR: Final = "import_energy_sensor"
-CONF_EXPORT_ENERGY_SENSOR: Final = "export_energy_sensor"
 
 SOURCE_TYPE_PV: Final = "pv"
 SOURCE_TYPE_BATTERY: Final = "battery"
@@ -96,13 +93,3 @@ ERROR_BATTERY_NOT_SUPPORTED: Final = "BATTERY_NOT_SUPPORTED"
 
 # Percent, for the optional state-of-charge sensor of a battery device.
 PERCENT_UNITS: Final[frozenset[str]] = frozenset({"%"})
-
-
-class NotConfigured(Enum):
-    """Marks an optional meter register that has no sensor at all — omitted
-    from the report, unlike a configured one without a value (sent as null)."""
-
-    NOT_CONFIGURED = "not_configured"
-
-
-NOT_CONFIGURED: Final = NotConfigured.NOT_CONFIGURED

@@ -38,12 +38,10 @@ from .api import (
 from .const import (
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
-    CONF_EXPORT_ENERGY_SENSOR,
     CONF_GRID_EXPORT_SENSOR,
     CONF_GRID_IMPORT_SENSOR,
     CONF_GRID_INVERT,
     CONF_GRID_SENSOR,
-    CONF_IMPORT_ENERGY_SENSOR,
     CONF_PV_SENSORS,
     CONF_SITE_ID,
     CONF_SOC_SENSOR,
@@ -58,11 +56,9 @@ from .const import (
 )
 from .coordinator import DeviceReading, read_device, send_reading, stash_first_report
 from .readings import (
-    SensorNotEnergyError,
     SensorNotPercentError,
     SensorNotPowerError,
     SensorUnavailableError,
-    read_energy_wh,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -105,12 +101,6 @@ METER_SENSOR_SCHEMA: dict[vol.Marker, Any] = {
     vol.Optional(CONF_GRID_EXPORT_SENSOR): EntitySelector(
         EntitySelectorConfig(domain="sensor")
     ),
-    vol.Optional(CONF_IMPORT_ENERGY_SENSOR): EntitySelector(
-        EntitySelectorConfig(domain="sensor")
-    ),
-    vol.Optional(CONF_EXPORT_ENERGY_SENSOR): EntitySelector(
-        EntitySelectorConfig(domain="sensor")
-    ),
 }
 
 _SENSOR_SCHEMAS: dict[str, dict[vol.Marker, Any]] = {
@@ -150,8 +140,6 @@ def _options_from(source_type: str, user_input: Mapping[str, Any]) -> dict[str, 
             CONF_GRID_SENSOR,
             CONF_GRID_IMPORT_SENSOR,
             CONF_GRID_EXPORT_SENSOR,
-            CONF_IMPORT_ENERGY_SENSOR,
-            CONF_EXPORT_ENERGY_SENSOR,
         ):
             if entity_id := user_input.get(key):
                 options[key] = entity_id
@@ -215,13 +203,6 @@ async def _validate(
         return {CONF_API_TOKEN: f"token_is_{device.device_type}"}, {}, device, None
 
     try:
-        if source_type == SOURCE_TYPE_METER:
-            # At runtime a register without a value is only sent as null. At
-            # setup it must deliver one: that is the moment a wrongly picked
-            # entity can still be caught, as for every other sensor.
-            for key in (CONF_IMPORT_ENERGY_SENSOR, CONF_EXPORT_ENERGY_SENSOR):
-                if entity_id := options.get(key):
-                    read_energy_wh(hass, entity_id)
         reading = read_device(hass, source_type, options)
     except SensorUnavailableError as err:
         return (
@@ -240,18 +221,6 @@ async def _validate(
     except SensorNotPercentError as err:
         return (
             {CONF_SOC_SENSOR: "sensor_not_percent"},
-            {"entity_id": err.entity_id, "unit": err.unit or "—"},
-            device,
-            None,
-        )
-    except SensorNotEnergyError as err:
-        field = (
-            CONF_IMPORT_ENERGY_SENSOR
-            if options.get(CONF_IMPORT_ENERGY_SENSOR) == err.entity_id
-            else CONF_EXPORT_ENERGY_SENSOR
-        )
-        return (
-            {field: "sensor_not_energy"},
             {"entity_id": err.entity_id, "unit": err.unit or "—"},
             device,
             None,

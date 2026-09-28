@@ -26,12 +26,10 @@ from .api import (
 from .const import (
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
-    CONF_EXPORT_ENERGY_SENSOR,
     CONF_GRID_EXPORT_SENSOR,
     CONF_GRID_IMPORT_SENSOR,
     CONF_GRID_INVERT,
     CONF_GRID_SENSOR,
-    CONF_IMPORT_ENERGY_SENSOR,
     CONF_PV_SENSORS,
     CONF_SOC_SENSOR,
     CONF_SOURCE_TYPE,
@@ -44,7 +42,6 @@ from .readings import (
     BatteryReading,
     MeterReading,
     PlantReading,
-    SensorNotEnergyError,
     SensorNotPercentError,
     SensorNotPowerError,
     SensorUnavailableError,
@@ -150,8 +147,6 @@ def read_device(
             grid_invert=bool(options.get(CONF_GRID_INVERT, False)),
             import_sensor=options.get(CONF_GRID_IMPORT_SENSOR) or None,
             export_sensor=options.get(CONF_GRID_EXPORT_SENSOR) or None,
-            import_energy_sensor=options.get(CONF_IMPORT_ENERGY_SENSOR) or None,
-            export_energy_sensor=options.get(CONF_EXPORT_ENERGY_SENSOR) or None,
         )
     return read_plant(hass, list(options.get(CONF_PV_SENSORS, [])))
 
@@ -164,11 +159,7 @@ async def send_reading(client: WabenwattClient, reading: DeviceReading) -> None:
             soc_percent=reading.soc_percent,
         )
     elif isinstance(reading, MeterReading):
-        await client.report_meter(
-            grid_power_w=reading.grid_power_w,
-            import_energy_wh=reading.import_energy_wh,
-            export_energy_wh=reading.export_energy_wh,
-        )
+        await client.report_meter(grid_power_w=reading.grid_power_w)
     else:
         await client.report(pv_power_w=reading.pv_power_w)
 
@@ -220,7 +211,6 @@ class WabenwattCoordinator(DataUpdateCoordinator[ReporterState]):
         except (
             SensorNotPowerError,
             SensorNotPercentError,
-            SensorNotEnergyError,
         ) as err:
             return self._failed(
                 previous, ERROR_SENSOR_NOT_POWER, str(err), now, blocking=err.entity_id
