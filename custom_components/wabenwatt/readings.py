@@ -128,14 +128,30 @@ def read_plant(hass: HomeAssistant, pv_sensors: list[str]) -> PlantReading:
 
 def read_battery(
     hass: HomeAssistant,
-    battery_sensor: str,
+    *,
+    battery_sensor: str | None,
     battery_invert: bool,
+    charge_sensor: str | None,
+    discharge_sensor: str | None,
     soc_sensor: str | None,
 ) -> BatteryReading:
-    """Read a battery device: power (and optionally its state of charge)."""
-    power = read_power_w(hass, battery_sensor)
-    if battery_invert:
-        power = -power
+    """Read a battery device: power (and optionally its state of charge).
+
+    Power comes EITHER from one signed sensor (the sign option applies to it
+    only) OR from separate charge and discharge sensors. For the pair the
+    absolute values are used: the field already names the direction, and some
+    integrations keep charge power negative while others keep it positive.
+    """
+    if battery_sensor is not None:
+        power = read_power_w(hass, battery_sensor)
+        if battery_invert:
+            power = -power
+    else:
+        # The flow only stores this form with both sensors set.
+        assert charge_sensor is not None and discharge_sensor is not None
+        power = abs(read_power_w(hass, discharge_sensor)) - abs(
+            read_power_w(hass, charge_sensor)
+        )
     soc = None if soc_sensor is None else round(read_percent(hass, soc_sensor))
     return BatteryReading(battery_power_w=round(power), soc_percent=soc)
 

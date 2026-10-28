@@ -11,7 +11,7 @@ DOMAIN: Final = "wabenwatt"
 # is installed out there. Home Assistant's own User-Agent stays untouched — it
 # carries the HA core version, which is a different and equally useful number.
 # Kept in step with manifest.json by test_client_marker.py.
-INTEGRATION_VERSION: Final = "0.5.1"
+INTEGRATION_VERSION: Final = "0.6.0"
 CLIENT_HEADER: Final = "X-Wabenwatt-Client"
 CLIENT_MARKER: Final = f"wabenwatt-homeassistant/{INTEGRATION_VERSION}"
 
@@ -38,10 +38,14 @@ CONF_METER_ID: Final = "meter_id"
 # names it, so grouping the entries of one site later needs no migration.
 CONF_SITE_ID: Final = "site_id"
 CONF_PV_SENSORS: Final = "pv_sensors"
-# Battery device (source type "battery"): its power sensor, the sign option, and
-# the optional state of charge.
+# Battery device (source type "battery"): EITHER one signed power sensor
+# (positive = discharging) with its sign option, OR two sensors for charge and
+# discharge power whose absolute values are combined. Plus the optional state
+# of charge.
 CONF_BATTERY_SENSOR: Final = "battery_sensor"
 CONF_BATTERY_INVERT: Final = "battery_invert"
+CONF_BATTERY_CHARGE_SENSOR: Final = "battery_charge_sensor"
+CONF_BATTERY_DISCHARGE_SENSOR: Final = "battery_discharge_sensor"
 CONF_SOC_SENSOR: Final = "soc_sensor"
 # Grid meter (source type "meter"): EITHER one signed power sensor (positive =
 # import) with its sign option, OR two non-negative sensors for import and

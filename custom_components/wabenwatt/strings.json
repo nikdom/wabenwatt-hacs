@@ -30,17 +30,21 @@
       },
       "battery": {
         "title": "Connect home storage",
-        "description": "Home storage is its own device with its own token. Create it on wabenwatt.de first — that is where you get the token. Saving sends a first report right away.",
+        "description": "The home storage is a device of its own with its own token. Create it on wabenwatt.de first – that's where you get the token. Give the battery power in exactly one of two forms: one signed sensor (positive = discharging, negative = charging) or two sensors for charge and discharge. Saving sends a first report right away.",
         "data": {
           "api_token": "Storage token",
-          "battery_sensor": "Battery power sensor",
+          "battery_sensor": "Battery power sensor (signed)",
           "battery_invert": "Invert the sign",
+          "battery_charge_sensor": "Charge power sensor",
+          "battery_discharge_sensor": "Discharge power sensor",
           "soc_sensor": "State-of-charge sensor (optional)"
         },
         "data_description": {
           "api_token": "The home storage's token — not a plant's. You find it on wabenwatt.de on the storage's page.",
-          "battery_sensor": "Your storage's power. wabenwatt expects positive = discharging.",
-          "battery_invert": "Turn on if your sensor is positive while charging.",
+          "battery_sensor": "Form 1: your storage's power, positive while discharging, negative while charging. Leave empty if you use form 2.",
+          "battery_invert": "Form 1 only: turn on if your sensor is positive while charging.",
+          "battery_charge_sensor": "Form 2: the charge power, only together with the discharge sensor. The absolute value counts – it doesn't matter whether your sensor is positive or negative while charging.",
+          "battery_discharge_sensor": "Form 2: the discharge power, only together with the charge sensor. Reported is discharge − charge.",
           "soc_sensor": "The state of charge in percent. Optional — without it the storage reports only its power and cannot contribute to a hexagon balance later."
         }
       },
@@ -72,6 +76,7 @@
       "cannot_connect": "Could not reach wabenwatt. Check the internet connection and try again.",
       "sensor_not_percent": "{entity_id} is not a percentage sensor (unit: {unit}). Pick your storage's state-of-charge sensor.",
       "grid_power_form": "Choose exactly one form for the grid power: either one signed sensor or both the import and the export sensor.",
+      "battery_power_form": "Choose exactly one form for the battery power: either one signed sensor or both sensors for charge and discharge.",
       "token_is_pv": "This token belongs to a PV system. Add it via “PV system” instead.",
       "token_is_battery": "This token belongs to a home storage. Add it via “Home storage” instead.",
       "token_is_meter": "This token belongs to a grid meter. Add it via “Grid meter” instead.",
@@ -89,8 +94,10 @@
         "description": "Changes are checked with a real report right away.",
         "data": {
           "pv_sensors": "Solar power sensor(s)",
-          "battery_sensor": "Battery power sensor",
+          "battery_sensor": "Battery power sensor (signed)",
           "battery_invert": "Invert the sign",
+          "battery_charge_sensor": "Charge power sensor",
+          "battery_discharge_sensor": "Discharge power sensor",
           "soc_sensor": "State-of-charge sensor (optional)",
           "grid_sensor": "Grid power sensor (signed)",
           "grid_invert": "Invert the sign",
@@ -99,8 +106,10 @@
         },
         "data_description": {
           "pv_sensors": "The plant's total solar power. Plug-in solar (micro inverter): the AC value. String or hybrid inverters: the DC power of the strings — not the AC value, which for hybrid systems also contains the battery output. No total entity? Select one entity per string; the values are added up.",
-          "battery_sensor": "Your storage's power. wabenwatt expects positive = discharging.",
-          "battery_invert": "Turn on if your sensor is positive while charging.",
+          "battery_sensor": "Form 1: your storage's power, positive while discharging, negative while charging. Leave empty if you use form 2.",
+          "battery_invert": "Form 1 only: turn on if your sensor is positive while charging.",
+          "battery_charge_sensor": "Form 2: the charge power, only together with the discharge sensor. The absolute value counts – it doesn't matter whether your sensor is positive or negative while charging.",
+          "battery_discharge_sensor": "Form 2: the discharge power, only together with the charge sensor. Reported is discharge − charge.",
           "soc_sensor": "The state of charge in percent. Optional — without it the storage reports only its power and cannot contribute to a hexagon balance later.",
           "grid_sensor": "Form 1: one sensor, positive while importing from the grid, negative while exporting — e.g. an SML reading head (16.7.0), Shelly 3EM/Pro 3EM “total_act_power”, evcc grid power. Leave empty if you use form 2.",
           "grid_invert": "Form 1 only: turn on if your sensor is positive while exporting (e.g. “grid feed-in” of some inverter integrations).",
@@ -118,6 +127,7 @@
       "cannot_connect": "Could not reach wabenwatt. Check the internet connection and try again.",
       "sensor_not_percent": "{entity_id} is not a percentage sensor (unit: {unit}). Pick your storage's state-of-charge sensor.",
       "grid_power_form": "Choose exactly one form for the grid power: either one signed sensor or both the import and the export sensor.",
+      "battery_power_form": "Choose exactly one form for the battery power: either one signed sensor or both sensors for charge and discharge.",
       "token_is_pv": "This token belongs to a PV system. Add it via “PV system” instead.",
       "token_is_battery": "This token belongs to a home storage. Add it via “Home storage” instead.",
       "token_is_meter": "This token belongs to a grid meter. Add it via “Grid meter” instead.",

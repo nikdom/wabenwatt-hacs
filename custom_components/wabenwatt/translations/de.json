@@ -30,17 +30,21 @@
       },
       "battery": {
         "title": "Hausspeicher verbinden",
-        "description": "Der Hausspeicher ist ein eigenes Gerät mit eigenem Token. Lege ihn zuerst auf wabenwatt.de an – dort bekommst du den Token. Beim Speichern wird sofort ein erster Report gesendet.",
+        "description": "Der Hausspeicher ist ein eigenes Gerät mit eigenem Token. Lege ihn zuerst auf wabenwatt.de an – dort bekommst du den Token. Die Akkuleistung gibst du in genau einer von zwei Formen an: ein Sensor mit Vorzeichen (positiv = Entladung, negativ = Ladung) oder zwei Sensoren für Ladung und Entladung. Beim Speichern wird sofort ein erster Report gesendet.",
         "data": {
           "api_token": "Speicher-Token",
-          "battery_sensor": "Batterieleistungs-Sensor",
+          "battery_sensor": "Batterieleistungs-Sensor (mit Vorzeichen)",
           "battery_invert": "Vorzeichen umkehren",
+          "battery_charge_sensor": "Ladeleistungs-Sensor",
+          "battery_discharge_sensor": "Entladeleistungs-Sensor",
           "soc_sensor": "Ladestand-Sensor (optional)"
         },
         "data_description": {
           "api_token": "Der Token des Hausspeichers – nicht der einer Anlage. Du findest ihn auf wabenwatt.de auf der Seite des Speichers.",
-          "battery_sensor": "Die Leistung deines Speichers. wabenwatt erwartet positiv = Entladung.",
-          "battery_invert": "Einschalten, wenn dein Sensor beim Laden positiv ist.",
+          "battery_sensor": "Form 1: die Leistung deines Speichers, positiv bei Entladung, negativ bei Ladung. Leer lassen, wenn du Form 2 nutzt.",
+          "battery_invert": "Nur für Form 1: einschalten, wenn dein Sensor beim Laden positiv ist.",
+          "battery_charge_sensor": "Form 2: die Ladeleistung, nur zusammen mit dem Entlade-Sensor. Es zählt der Betrag – ob dein Sensor beim Laden positiv oder negativ ist, spielt keine Rolle.",
+          "battery_discharge_sensor": "Form 2: die Entladeleistung, nur zusammen mit dem Lade-Sensor. Gemeldet wird Entladung − Ladung.",
           "soc_sensor": "Der Ladestand in Prozent. Optional – ohne ihn meldet der Speicher nur seine Leistung und kann später nicht zur Wabenbilanz beitragen."
         }
       },
@@ -72,6 +76,7 @@
       "cannot_connect": "wabenwatt ist nicht erreichbar. Prüfe die Internetverbindung und versuche es erneut.",
       "sensor_not_percent": "{entity_id} ist kein Prozent-Sensor (Einheit: {unit}). Wähle den Ladestand-Sensor deines Speichers.",
       "grid_power_form": "Wähle für die Netzleistung genau eine Form: entweder einen Sensor mit Vorzeichen oder beide Sensoren für Bezug und Einspeisung.",
+      "battery_power_form": "Wähle für die Akkuleistung genau eine Form: entweder einen Sensor mit Vorzeichen oder beide Sensoren für Ladung und Entladung.",
       "token_is_pv": "Dieser Token gehört zu einer PV-Anlage. Füge sie über „PV-Anlage“ hinzu.",
       "token_is_battery": "Dieser Token gehört zu einem Hausspeicher. Füge ihn über „Hausspeicher“ hinzu.",
       "token_is_meter": "Dieser Token gehört zu einem Zähler. Füge ihn über „Zähler (Netzanschluss)“ hinzu.",
@@ -89,8 +94,10 @@
         "description": "Änderungen werden sofort mit einem echten Report geprüft.",
         "data": {
           "pv_sensors": "Solarleistungs-Sensor(en)",
-          "battery_sensor": "Batterieleistungs-Sensor",
+          "battery_sensor": "Batterieleistungs-Sensor (mit Vorzeichen)",
           "battery_invert": "Vorzeichen umkehren",
+          "battery_charge_sensor": "Ladeleistungs-Sensor",
+          "battery_discharge_sensor": "Entladeleistungs-Sensor",
           "soc_sensor": "Ladestand-Sensor (optional)",
           "grid_sensor": "Netzleistungs-Sensor (mit Vorzeichen)",
           "grid_invert": "Vorzeichen umkehren",
@@ -99,8 +106,10 @@
         },
         "data_description": {
           "pv_sensors": "Die gesamte Solarleistung der Anlage. Bei Steckersolar (Micro-Wechselrichter) ist das der AC-Wert. Bei String- oder Hybrid-Wechselrichtern die DC-Leistung der Strings – nicht der AC-Wert, in dem bei Hybridanlagen auch die Abgabe des Akkus steckt. Keine Gesamt-Entität? Wähle je String eine Entität; die Werte werden addiert.",
-          "battery_sensor": "Die Leistung deines Speichers. wabenwatt erwartet positiv = Entladung.",
-          "battery_invert": "Einschalten, wenn dein Sensor beim Laden positiv ist.",
+          "battery_sensor": "Form 1: die Leistung deines Speichers, positiv bei Entladung, negativ bei Ladung. Leer lassen, wenn du Form 2 nutzt.",
+          "battery_invert": "Nur für Form 1: einschalten, wenn dein Sensor beim Laden positiv ist.",
+          "battery_charge_sensor": "Form 2: die Ladeleistung, nur zusammen mit dem Entlade-Sensor. Es zählt der Betrag – ob dein Sensor beim Laden positiv oder negativ ist, spielt keine Rolle.",
+          "battery_discharge_sensor": "Form 2: die Entladeleistung, nur zusammen mit dem Lade-Sensor. Gemeldet wird Entladung − Ladung.",
           "soc_sensor": "Der Ladestand in Prozent. Optional – ohne ihn meldet der Speicher nur seine Leistung und kann später nicht zur Wabenbilanz beitragen.",
           "grid_sensor": "Form 1: ein Sensor, positiv bei Bezug aus dem Netz, negativ bei Einspeisung – z. B. SML-Lesekopf (16.7.0), Shelly 3EM/Pro 3EM „total_act_power“, evcc-Netzleistung. Leer lassen, wenn du Form 2 nutzt.",
           "grid_invert": "Nur für Form 1: einschalten, wenn dein Sensor bei Einspeisung positiv ist (z. B. „Netzeinspeisung“ mancher Wechselrichter-Integrationen).",
@@ -118,6 +127,7 @@
       "cannot_connect": "wabenwatt ist nicht erreichbar. Prüfe die Internetverbindung und versuche es erneut.",
       "sensor_not_percent": "{entity_id} ist kein Prozent-Sensor (Einheit: {unit}). Wähle den Ladestand-Sensor deines Speichers.",
       "grid_power_form": "Wähle für die Netzleistung genau eine Form: entweder einen Sensor mit Vorzeichen oder beide Sensoren für Bezug und Einspeisung.",
+      "battery_power_form": "Wähle für die Akkuleistung genau eine Form: entweder einen Sensor mit Vorzeichen oder beide Sensoren für Ladung und Entladung.",
       "token_is_pv": "Dieser Token gehört zu einer PV-Anlage. Füge sie über „PV-Anlage“ hinzu.",
       "token_is_battery": "Dieser Token gehört zu einem Hausspeicher. Füge ihn über „Hausspeicher“ hinzu.",
       "token_is_meter": "Dieser Token gehört zu einem Zähler. Füge ihn über „Zähler (Netzanschluss)“ hinzu.",

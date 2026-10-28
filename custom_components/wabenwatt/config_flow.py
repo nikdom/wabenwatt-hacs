@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import hashlib
 import logging
 from typing import Any
@@ -36,6 +36,8 @@ from .api import (
     WabenwattClient,
 )
 from .const import (
+    CONF_BATTERY_CHARGE_SENSOR,
+    CONF_BATTERY_DISCHARGE_SENSOR,
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
     CONF_GRID_EXPORT_SENSOR,
@@ -76,11 +78,21 @@ PLANT_SENSOR_SCHEMA: dict[vol.Marker, Any] = {
     ),
 }
 
+# Battery power in exactly one of two forms, like the meter: one signed sensor
+# (with its sign option) OR charge and discharge power as two sensors. Entries
+# from before 0.6.0 hold only battery_sensor, which is the first form, so they
+# need no migration. _battery_form_error checks the "one of".
 BATTERY_SENSOR_SCHEMA: dict[vol.Marker, Any] = {
-    vol.Required(CONF_BATTERY_SENSOR): EntitySelector(
+    vol.Optional(CONF_BATTERY_SENSOR): EntitySelector(
         EntitySelectorConfig(domain="sensor")
     ),
     vol.Optional(CONF_BATTERY_INVERT, default=False): BooleanSelector(),
+    vol.Optional(CONF_BATTERY_CHARGE_SENSOR): EntitySelector(
+        EntitySelectorConfig(domain="sensor")
+    ),
+    vol.Optional(CONF_BATTERY_DISCHARGE_SENSOR): EntitySelector(
+        EntitySelectorConfig(domain="sensor")
+    ),
     vol.Optional(CONF_SOC_SENSOR): EntitySelector(
         EntitySelectorConfig(domain="sensor")
     ),
@@ -127,10 +139,20 @@ def token_unique_id(token: str) -> str:
 
 def _options_from(source_type: str, user_input: Mapping[str, Any]) -> dict[str, Any]:
     if source_type == SOURCE_TYPE_BATTERY:
-        options: dict[str, Any] = {
-            CONF_BATTERY_SENSOR: user_input[CONF_BATTERY_SENSOR],
-            CONF_BATTERY_INVERT: bool(user_input.get(CONF_BATTERY_INVERT, False)),
-        }
+        options: dict[str, Any] = {}
+        for key in (
+            CONF_BATTERY_SENSOR,
+            CONF_BATTERY_CHARGE_SENSOR,
+            CONF_BATTERY_DISCHARGE_SENSOR,
+        ):
+            if entity_id := user_input.get(key):
+                options[key] = entity_id
+        # The sign option belongs to the single-sensor form only; the pair is
+        # read as absolute values.
+        if CONF_BATTERY_SENSOR in options:
+            options[CONF_BATTERY_INVERT] = bool(
+                user_input.get(CONF_BATTERY_INVERT, False)
+            )
         if soc := user_input.get(CONF_SOC_SENSOR):
             options[CONF_SOC_SENSOR] = soc
         return options
@@ -151,15 +173,36 @@ def _options_from(source_type: str, user_input: Mapping[str, Any]) -> dict[str, 
     return {CONF_PV_SENSORS: list(user_input[CONF_PV_SENSORS])}
 
 
+def _one_form(options: Mapping[str, Any], single: str, pair: tuple[str, str]) -> bool:
+    """Exactly one of the two power forms is given, and given completely."""
+    has_single = single in options
+    has_pair = tuple(key in options for key in pair)
+    return (has_single and not any(has_pair)) or (not has_single and all(has_pair))
+
+
 def _meter_form_error(options: Mapping[str, Any]) -> str | None:
-    """Exactly one of the two grid power forms, complete — or an error key."""
-    single = CONF_GRID_SENSOR in options
-    pair = (CONF_GRID_IMPORT_SENSOR in options, CONF_GRID_EXPORT_SENSOR in options)
-    if single and not any(pair):
-        return None
-    if not single and all(pair):
+    if _one_form(
+        options, CONF_GRID_SENSOR, (CONF_GRID_IMPORT_SENSOR, CONF_GRID_EXPORT_SENSOR)
+    ):
         return None
     return "grid_power_form"
+
+
+def _battery_form_error(options: Mapping[str, Any]) -> str | None:
+    if _one_form(
+        options,
+        CONF_BATTERY_SENSOR,
+        (CONF_BATTERY_CHARGE_SENSOR, CONF_BATTERY_DISCHARGE_SENSOR),
+    ):
+        return None
+    return "battery_power_form"
+
+
+# Types with an "exactly one form" rule a schema cannot express.
+_FORM_CHECKS: dict[str, Callable[[Mapping[str, Any]], str | None]] = {
+    SOURCE_TYPE_METER: _meter_form_error,
+    SOURCE_TYPE_BATTERY: _battery_form_error,
+}
 
 
 async def _validate(
@@ -180,7 +223,8 @@ async def _validate(
     report immediately after this one would trip the server's minimum report
     interval (see stash_first_report's docstring).
     """
-    if source_type == SOURCE_TYPE_METER and (form_error := _meter_form_error(options)):
+    form_check = _FORM_CHECKS.get(source_type)
+    if form_check is not None and (form_error := form_check(options)):
         return {"base": form_error}, {}, None, None
 
     client = WabenwattClient(async_get_clientsession(hass), token)

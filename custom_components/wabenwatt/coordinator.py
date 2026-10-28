@@ -24,6 +24,8 @@ from .api import (
     WabenwattClient,
 )
 from .const import (
+    CONF_BATTERY_CHARGE_SENSOR,
+    CONF_BATTERY_DISCHARGE_SENSOR,
     CONF_BATTERY_INVERT,
     CONF_BATTERY_SENSOR,
     CONF_GRID_EXPORT_SENSOR,
@@ -133,12 +135,13 @@ def read_device(
     would validate something the coordinator then does not send.
     """
     if source_type == SOURCE_TYPE_BATTERY:
-        # A battery entry always has its power sensor; the flow requires it.
         return read_battery(
             hass,
-            options[CONF_BATTERY_SENSOR],
-            bool(options.get(CONF_BATTERY_INVERT, False)),
-            options.get(CONF_SOC_SENSOR) or None,
+            battery_sensor=options.get(CONF_BATTERY_SENSOR) or None,
+            battery_invert=bool(options.get(CONF_BATTERY_INVERT, False)),
+            charge_sensor=options.get(CONF_BATTERY_CHARGE_SENSOR) or None,
+            discharge_sensor=options.get(CONF_BATTERY_DISCHARGE_SENSOR) or None,
+            soc_sensor=options.get(CONF_SOC_SENSOR) or None,
         )
     if source_type == SOURCE_TYPE_METER:
         return read_meter(
